@@ -1,0 +1,20 @@
+{
+  "name": "email-suppression-portal",
+  "version": "1.0.0",
+  "description": "Internal portal for managing bounced/unsubscribed email suppression lists and looking up email validity/suppression status.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "better-sqlite3": "^11.9.1",
+    "csv-parse": "^5.6.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "multer": "^2.0.0"
+  }
+}
