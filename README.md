@@ -124,6 +124,33 @@ frontend/
     api/                     thin fetch wrappers per backend route group
 ```
 
+## Deploying somewhere persistent (for other people to use)
+
+Local `npm start` and GitHub Codespaces are both single-user/ephemeral — fine
+for trying it yourself, not for giving a team a URL that stays up. This repo
+includes a `Dockerfile` and `fly.toml` for [Fly.io](https://fly.io), which
+(unlike most free static/serverless hosts) supports a real persistent volume,
+which SQLite needs.
+
+```bash
+curl -L https://fly.io/install.sh | sh   # install flyctl
+fly auth login                            # creates/logs into a Fly.io account (free tier available)
+
+fly launch --no-deploy                    # picks up the existing Dockerfile + fly.toml; choose a unique app name
+fly volumes create sieve_data --size 1 --region iad   # match the region you picked
+
+fly secrets set PORTAL_PASSWORD="choose-a-real-password" SESSION_SECRET="$(openssl rand -hex 32)"
+
+fly deploy
+fly open   # opens https://<your-app-name>.fly.dev — this is the durable, shareable URL
+```
+
+The volume (`sieve_data`, mounted at `/app/data` per `fly.toml`) is what makes
+the suppression database survive redeploys and restarts — without it, every
+deploy would reset to the seeded demo data. Any other host that gives you a
+persistent disk plus a long-running Node process works the same way; Fly.io
+is just a straightforward free option for this shape of app.
+
 ## Large imports
 
 Import files are streamed from disk (not buffered in memory) and processed
