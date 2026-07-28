@@ -4,6 +4,8 @@ const { addEntry } = require('./suppressions');
 const DOMAINS = ['northgate.io', 'meridianworks.com', 'brightfield.co', 'lumenpartners.com', 'atlascorp.net', 'summitware.io', 'harbortech.com', 'vertexlabs.co'];
 const FIRST = ['maria', 'james', 'ava', 'noah', 'liam', 'sofia', 'ethan', 'mia', 'lucas', 'grace', 'daniel', 'ruth', 'omar', 'priya', 'wei', 'ines'];
 const LAST = ['chen', 'ortiz', 'nguyen', 'patel', 'kowalski', 'mensah', 'silva', 'novak', 'haddad', 'romero'];
+const COMPANIES = ['Northgate Inc.', 'Meridian Works', 'Brightfield Co.', 'Lumen Partners', 'Atlas Corp', 'Summitware', 'Harbor Tech', 'Vertex Labs'];
+const REPS = ['Jordan Lee', 'Casey Kim', 'Taylor Brooks', 'Morgan Reyes'];
 
 function pick(arr, n) {
   return arr[n % arr.length];
@@ -14,6 +16,21 @@ function fakeEmail(seed) {
   const last = pick(LAST, seed * 7 + 3);
   const domain = pick(DOMAINS, seed * 13 + 5);
   return `${first}.${last}${seed % 97}@${domain}`;
+}
+
+// Modeled on a typical Constant Contact contact export, since that's the
+// primary import source — a numeric contact id and a link back to the
+// contact's page rather than a Salesforce-style lead id/URL.
+function fakeCrmFields(seed) {
+  if (seed % 5 === 0) return { companyName: null, leadId: null, phone: null, crmOwner: null, crmRecordUrl: null };
+  const contactId = String(10000000 + ((seed * 9301 + 49297) % 9000000));
+  return {
+    companyName: pick(COMPANIES, seed * 3 + 1),
+    leadId: contactId,
+    phone: `+1-555-${String(100 + (seed * 7) % 900).padStart(3, '0')}-${String(1000 + (seed * 13) % 9000).padStart(4, '0')}`,
+    crmOwner: pick(REPS, seed * 5 + 2),
+    crmRecordUrl: `https://app.constantcontact.com/pages/contacts/details/${contactId}`,
+  };
 }
 
 function daysAgo(n, hh = 9, mm = 0) {
@@ -64,6 +81,7 @@ function seedEntries(listIds) {
       addedBy,
       createdAt,
       eventDetail: `Reported via ${i % 5 === 0 ? 'API' : 'CSV import'}`,
+      ...fakeCrmFields(i),
     });
     if (result.ok && !result.wasDuplicate) seeded.push({ entryId: result.entryId, reason, createdAt });
   }

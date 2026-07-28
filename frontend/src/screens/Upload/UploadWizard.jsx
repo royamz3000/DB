@@ -31,9 +31,26 @@ const MAP_TARGETS = [
   { value: 'reason', label: 'Suppression reason' },
   { value: 'date', label: 'Date added' },
   { value: 'added_by', label: 'Added by' },
+  { value: 'company', label: 'Company name' },
+  { value: 'lead_id', label: 'Lead / Contact ID' },
+  { value: 'phone', label: 'Phone number' },
+  { value: 'crm_owner', label: 'CRM owner' },
+  { value: 'crm_url', label: 'CRM record URL' },
   { value: 'note', label: 'Note' },
   { value: 'ignore', label: '— ignore —' },
 ];
+
+const MAP_KEY_TO_GUESS = {
+  email: 'emailCol',
+  reason: 'reasonCol',
+  date: 'dateCol',
+  added_by: 'addedByCol',
+  company: 'companyCol',
+  lead_id: 'leadIdCol',
+  phone: 'phoneCol',
+  crm_owner: 'crmOwnerCol',
+  crm_url: 'crmUrlCol',
+};
 
 const REASON_OPTIONS = [
   { value: 'hard_bounce', label: 'Hard bounce' },
@@ -85,11 +102,10 @@ export default function UploadWizard() {
       setStaging(result);
       const initialMapping = {};
       result.columns.forEach((col) => {
-        if (col.index === result.guessedMapping.emailCol) initialMapping[col.index] = 'email';
-        else if (col.index === result.guessedMapping.reasonCol) initialMapping[col.index] = 'reason';
-        else if (col.index === result.guessedMapping.dateCol) initialMapping[col.index] = 'date';
-        else if (col.index === result.guessedMapping.addedByCol) initialMapping[col.index] = 'added_by';
-        else initialMapping[col.index] = 'ignore';
+        const matchedKey = Object.keys(MAP_KEY_TO_GUESS).find(
+          (key) => col.index === result.guessedMapping[MAP_KEY_TO_GUESS[key]],
+        );
+        initialMapping[col.index] = matchedKey || 'ignore';
       });
       setColumnMapping(initialMapping);
       setStep(1);
@@ -105,15 +121,25 @@ export default function UploadWizard() {
   };
 
   const startImport = async () => {
-    const emailCol = Number(Object.keys(columnMapping).find((k) => columnMapping[k] === 'email'));
-    const reasonColKey = Object.keys(columnMapping).find((k) => columnMapping[k] === 'reason');
+    const colFor = (targetKey) => {
+      const colIndex = Object.keys(columnMapping).find((k) => columnMapping[k] === targetKey);
+      return colIndex !== undefined ? Number(colIndex) : null;
+    };
 
     const { jobId: newJobId } = await createImportJob({
       stagingId: staging.stagingId,
       filename: staging.filename,
       listId,
       fileKind,
-      mapping: { emailCol, reasonCol: reasonColKey !== undefined ? Number(reasonColKey) : null },
+      mapping: {
+        emailCol: colFor('email'),
+        reasonCol: colFor('reason'),
+        companyCol: colFor('company'),
+        leadIdCol: colFor('lead_id'),
+        phoneCol: colFor('phone'),
+        crmOwnerCol: colFor('crm_owner'),
+        crmUrlCol: colFor('crm_url'),
+      },
       validateSyntax,
       defaultReason,
       totalRows: staging.rowCount,

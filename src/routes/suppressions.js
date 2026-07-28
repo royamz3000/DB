@@ -15,11 +15,16 @@ router.get('/export', (req, res) => {
   const reasons = req.query.reasons ? String(req.query.reasons).split(',').filter(Boolean) : [];
   const rows = suppressions.listEntriesForExport({ search, reasons, listId });
 
+  const csvField = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="suppressed.csv"');
-  res.write('email,reason,list,added_by,added_at,risk_score\n');
+  res.write('email,reason,list,added_by,added_at,risk_score,company_name,lead_id,phone,crm_owner,crm_record_url\n');
   for (const r of rows) {
-    res.write(`"${r.email}",${r.reason},"${r.list_name}","${r.added_by}",${r.created_at},${r.risk_score}\n`);
+    res.write([
+      csvField(r.email), r.reason, csvField(r.list_name), csvField(r.added_by), r.created_at, r.risk_score,
+      csvField(r.company_name), csvField(r.lead_id), csvField(r.phone), csvField(r.crm_owner), csvField(r.crm_record_url),
+    ].join(',') + '\n');
   }
   res.end();
 });

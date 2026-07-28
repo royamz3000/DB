@@ -13,10 +13,30 @@ if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
 
 const CHUNK_SIZE = 1000;
 
+// Header hints cover both Constant Contact's space-separated export columns
+// (e.g. "Email Address", "Bounce Reason") and underscored CRM-style exports
+// (e.g. "email_address", "bounce_type"), since real files mix both styles.
 const EMAIL_HEADER_HINTS = ['email', 'email_address', 'email address', 'e-mail', 'address'];
-const REASON_HEADER_HINTS = ['reason', 'bounce_type', 'bounce_reason', 'suppression reason', 'suppression_reason'];
-const DATE_HEADER_HINTS = ['date', 'event_date', 'date added', 'added_at', 'created_at'];
-const ADDED_BY_HEADER_HINTS = ['added_by', 'user', 'owner', 'campaign_id'];
+const REASON_HEADER_HINTS = [
+  'reason', 'bounce_type', 'bounce type', 'bounce_reason', 'bounce reason',
+  'suppression reason', 'suppression_reason', 'unsubscribe reason', 'unsubscribe_reason',
+];
+const DATE_HEADER_HINTS = [
+  'date', 'event_date', 'event date', 'date added', 'date_added', 'added_at',
+  'created_at', 'bounce date', 'bounce_date', 'unsubscribe date', 'unsubscribe_date',
+];
+const ADDED_BY_HEADER_HINTS = ['added_by', 'added by', 'user'];
+const COMPANY_HEADER_HINTS = [
+  'company', 'company_name', 'company name', 'account', 'account_name',
+  'account name', 'organization', 'organization name',
+];
+const LEAD_ID_HEADER_HINTS = [
+  'lead_id', 'lead id', 'contact_id', 'contact id', 'salesforce_id',
+  'sfid', 'crm_id', 'crm id', 'record_id', 'record id',
+];
+const PHONE_HEADER_HINTS = ['phone', 'phone_number', 'phone number', 'mobile', 'contact_phone', 'contact phone', 'work phone'];
+const CRM_OWNER_HEADER_HINTS = ['owner', 'sales_rep', 'sales rep', 'account_owner', 'account owner', 'rep'];
+const CRM_URL_HEADER_HINTS = ['record_url', 'record url', 'salesforce_url', 'crm_url', 'crm url', 'link', 'url'];
 
 const FILE_KIND_DEFAULT_REASON = {
   bounced: 'hard_bounce',
@@ -97,6 +117,11 @@ async function previewStagedFile(stagingId) {
       reasonCol: guess(REASON_HEADER_HINTS),
       dateCol: guess(DATE_HEADER_HINTS),
       addedByCol: guess(ADDED_BY_HEADER_HINTS),
+      companyCol: guess(COMPANY_HEADER_HINTS),
+      leadIdCol: guess(LEAD_ID_HEADER_HINTS),
+      phoneCol: guess(PHONE_HEADER_HINTS),
+      crmOwnerCol: guess(CRM_OWNER_HEADER_HINTS),
+      crmUrlCol: guess(CRM_URL_HEADER_HINTS),
     },
   };
 }
@@ -146,7 +171,10 @@ function skippedReportPath(relPath) {
   return path.join(reportsDir, relPath);
 }
 
-async function startImportJob(jobId, { emailCol, reasonCol, listId, defaultReason, validateSyntax, filename }) {
+async function startImportJob(jobId, {
+  emailCol, reasonCol, listId, defaultReason, validateSyntax, filename,
+  companyCol, leadIdCol, phoneCol, crmOwnerCol, crmUrlCol,
+}) {
   const startedAt = Date.now();
   const stagedPath = path.join(stagingDir, `job-${jobId}${path.extname(filename) || '.csv'}`);
 
@@ -201,7 +229,16 @@ async function startImportJob(jobId, { emailCol, reasonCol, listId, defaultReaso
           if (!validity.hasMailServer) riskScoreOverride = 99;
         }
 
-        chunkBuffer.push({ email, reason, riskScoreOverride });
+        chunkBuffer.push({
+          email,
+          reason,
+          riskScoreOverride,
+          companyName: companyCol != null ? (cols[companyCol] || null) : null,
+          leadId: leadIdCol != null ? (cols[leadIdCol] || null) : null,
+          phone: phoneCol != null ? (cols[phoneCol] || null) : null,
+          crmOwner: crmOwnerCol != null ? (cols[crmOwnerCol] || null) : null,
+          crmRecordUrl: crmUrlCol != null ? (cols[crmUrlCol] || null) : null,
+        });
       }
 
       if (processed % CHUNK_SIZE === 0) {

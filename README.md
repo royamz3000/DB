@@ -41,6 +41,28 @@ The SQLite database lives at `data/sieve.db` (git-ignored) and is seeded
 automatically with a small, realistic demo dataset the first time the server
 starts against an empty database.
 
+## CRM/ESP fields on suppression entries
+
+Since suppression lists here are mostly populated from Constant Contact
+exports (with some Salesforce-style CRM data mixed in), each entry can also
+carry **company name, lead/contact ID, phone, CRM owner, and a CRM record
+URL**. The upload wizard's column-mapping step recognizes both Constant
+Contact's typical space-separated headers ("Company Name", "Phone Number",
+"Bounce Reason") and underscored CRM-style ones ("company_name",
+"bounce_type") when guessing the mapping. These fields are:
+
+- Shown in the address detail drawer (Company, Lead/Contact ID, Phone, CRM
+  owner, and a link to the CRM record when present).
+- Included in the Suppression list search (searching "Acme Corp" matches
+  entries whose company name is Acme Corp, not just its email domain).
+- Included in the CSV export.
+
+They are **not** shown as extra columns in the main suppression table — that
+table's layout matches the original design spec exactly, and cramming five
+more columns into it would break that fidelity. Manually-added entries and
+entries added via the API don't set these fields (they're CSV-import-only for
+now), so they show as "—" in the drawer for those rows.
+
 ## Environment variables
 
 | Variable          | Purpose                                          |

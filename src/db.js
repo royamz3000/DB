@@ -32,6 +32,11 @@ db.exec(`
     risk_score INTEGER NOT NULL DEFAULT 50,
     source TEXT NOT NULL DEFAULT 'manual',
     added_by TEXT NOT NULL DEFAULT 'ops@workspace',
+    company_name TEXT,
+    lead_id TEXT,
+    phone TEXT,
+    crm_owner TEXT,
+    crm_record_url TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (email, list_id)
@@ -40,6 +45,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_entries_email ON suppression_entries (email);
   CREATE INDEX IF NOT EXISTS idx_entries_reason ON suppression_entries (reason);
   CREATE INDEX IF NOT EXISTS idx_entries_list ON suppression_entries (list_id);
+  CREATE INDEX IF NOT EXISTS idx_entries_company ON suppression_entries (company_name);
+  CREATE INDEX IF NOT EXISTS idx_entries_lead_id ON suppression_entries (lead_id);
 
   CREATE TABLE IF NOT EXISTS entry_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,6 +121,15 @@ db.exec(`
 
   INSERT OR IGNORE INTO webhook_settings (id) VALUES (1);
 `);
+
+// Adds columns introduced after a database may have already been created,
+// so existing local databases pick up new fields without a manual reset.
+const existingColumns = new Set(db.prepare('PRAGMA table_info(suppression_entries)').all().map((c) => c.name));
+for (const column of ['company_name', 'lead_id', 'phone', 'crm_owner', 'crm_record_url']) {
+  if (!existingColumns.has(column)) {
+    db.exec(`ALTER TABLE suppression_entries ADD COLUMN ${column} TEXT`);
+  }
+}
 
 module.exports = db;
 module.exports.stagingDir = stagingDir;

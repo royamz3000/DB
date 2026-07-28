@@ -108,6 +108,20 @@ export default function AddressDetailDrawer({ entryId, onClose, onChanged }) {
             <Fact label="Added by" value={entry.added_by} />
             <Fact label="Risk score" value={`${entry.risk_score} / 100`} />
             <Fact label="Domain" value={domain} mono />
+            <Fact label="Company" value={entry.company_name || '—'} />
+            <Fact label="Lead / Contact ID" value={entry.lead_id || '—'} mono />
+            <Fact label="Phone" value={entry.phone || '—'} />
+            <Fact label="CRM owner" value={entry.crm_owner || '—'} />
+            {entry.crm_record_url && (
+              <Fact
+                label="CRM record"
+                value={
+                  <a href={entry.crm_record_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>
+                    Open in CRM ↗
+                  </a>
+                }
+              />
+            )}
           </div>
 
           <div>

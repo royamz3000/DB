@@ -16,11 +16,24 @@ function riskScoreFor(reason) {
 }
 
 const insertEntryStmt = db.prepare(`
-  INSERT INTO suppression_entries (email, reason, list_id, risk_score, source, added_by, created_at, updated_at)
-  VALUES (@email, @reason, @listId, @riskScore, @source, @addedBy, @createdAt, @createdAt)
+  INSERT INTO suppression_entries (
+    email, reason, list_id, risk_score, source, added_by,
+    company_name, lead_id, phone, crm_owner, crm_record_url,
+    created_at, updated_at
+  )
+  VALUES (
+    @email, @reason, @listId, @riskScore, @source, @addedBy,
+    @companyName, @leadId, @phone, @crmOwner, @crmRecordUrl,
+    @createdAt, @createdAt
+  )
   ON CONFLICT (email, list_id) DO UPDATE SET
     reason = excluded.reason,
     risk_score = excluded.risk_score,
+    company_name = COALESCE(excluded.company_name, suppression_entries.company_name),
+    lead_id = COALESCE(excluded.lead_id, suppression_entries.lead_id),
+    phone = COALESCE(excluded.phone, suppression_entries.phone),
+    crm_owner = COALESCE(excluded.crm_owner, suppression_entries.crm_owner),
+    crm_record_url = COALESCE(excluded.crm_record_url, suppression_entries.crm_record_url),
     updated_at = datetime('now')
 `);
 
@@ -32,7 +45,10 @@ const insertEventStmt = db.prepare(`
  * Adds (or refreshes) a single suppression entry and logs the "added" event.
  * Shared by manual add, bulk CSV import, and any future API-based import.
  */
-function addEntry({ email, reason, listId, source = 'manual', addedBy = 'ops@workspace', createdAt, eventDetail, riskScoreOverride }) {
+function addEntry({
+  email, reason, listId, source = 'manual', addedBy = 'ops@workspace', createdAt, eventDetail, riskScoreOverride,
+  companyName = null, leadId = null, phone = null, crmOwner = null, crmRecordUrl = null,
+}) {
   const normalized = normalizeEmail(email);
   if (!normalized || !hasValidSyntax(normalized)) return { ok: false, error: 'invalid_syntax' };
 
@@ -47,6 +63,11 @@ function addEntry({ email, reason, listId, source = 'manual', addedBy = 'ops@wor
     riskScore,
     source,
     addedBy,
+    companyName,
+    leadId,
+    phone,
+    crmOwner,
+    crmRecordUrl,
     createdAt: timestamp,
   });
 
@@ -112,7 +133,11 @@ function listEntries({ search, reasons, listId, page = 1, pageSize = 50 } = {}) 
     params.listId = listId;
   }
   if (search) {
-    clauses.push('(e.email LIKE @search OR l.name LIKE @search)');
+    clauses.push(`(
+      e.email LIKE @search OR l.name LIKE @search OR
+      e.company_name LIKE @search OR e.lead_id LIKE @search OR
+      e.phone LIKE @search OR e.crm_owner LIKE @search
+    )`);
     params.search = `%${search.trim().toLowerCase()}%`;
   }
 
@@ -160,7 +185,11 @@ function listEntriesForExport({ search, reasons, listId, scope } = {}) {
     params.listId = listId;
   }
   if (search) {
-    clauses.push('(e.email LIKE @search OR l.name LIKE @search)');
+    clauses.push(`(
+      e.email LIKE @search OR l.name LIKE @search OR
+      e.company_name LIKE @search OR e.lead_id LIKE @search OR
+      e.phone LIKE @search OR e.crm_owner LIKE @search
+    )`);
     params.search = `%${search.trim().toLowerCase()}%`;
   }
   if (reasons && reasons.length > 0) {
@@ -170,7 +199,8 @@ function listEntriesForExport({ search, reasons, listId, scope } = {}) {
   }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   return db.prepare(`
-    SELECT e.email, e.reason, l.name AS list_name, e.added_by, e.created_at, e.risk_score
+    SELECT e.email, e.reason, l.name AS list_name, e.added_by, e.created_at, e.risk_score,
+      e.company_name, e.lead_id, e.phone, e.crm_owner, e.crm_record_url
     FROM suppression_entries e JOIN lists l ON l.id = e.list_id
     ${where}
     ORDER BY e.created_at DESC

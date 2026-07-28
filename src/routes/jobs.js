@@ -69,6 +69,11 @@ router.post('/', async (req, res) => {
   jobs.startImportJob(jobId, {
     emailCol: mapping.emailCol,
     reasonCol: mapping.reasonCol ?? null,
+    companyCol: mapping.companyCol ?? null,
+    leadIdCol: mapping.leadIdCol ?? null,
+    phoneCol: mapping.phoneCol ?? null,
+    crmOwnerCol: mapping.crmOwnerCol ?? null,
+    crmUrlCol: mapping.crmUrlCol ?? null,
     listId,
     defaultReason,
     validateSyntax,
