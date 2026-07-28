@@ -12,20 +12,29 @@ suppression status before sending to them.
 - **Frontend**: React + Vite SPA (React Router, plain CSS design-token
   system, `@phosphor-icons/react`), built as static assets the Express
   server serves.
-- **Auth**: a single shared password gates the whole app (session cookie).
-  The ops/sales "role switcher" in the header is a client-side UI mode for
-  demo purposes, not a separate authentication system — anyone who knows the
-  shared password can flip between views.
+- **Auth**: real per-user accounts (bcrypt-hashed passwords, session
+  cookies). Each account has a role — `ops` or `sales` — assigned when the
+  account is created, not a self-service toggle. The role is enforced
+  server-side (see `requireOps` in `src/routes/auth.js`), not just hidden in
+  the UI, so a sales account genuinely cannot call the upload/un-suppress/
+  export endpoints even by hitting the API directly.
 
 ## Setup
 
 ```bash
 npm install
 cp .env.example .env
-# edit .env: set PORTAL_PASSWORD and SESSION_SECRET to real values
+# edit .env: set INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_NAME / INITIAL_ADMIN_PASSWORD
+#             and SESSION_SECRET to real values
 npm run build   # builds the frontend into frontend/dist
 npm start        # serves the API + built SPA on PORT (default 3000)
 ```
+
+On first boot against an empty database, the server creates one `ops`
+account from `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_NAME`/`INITIAL_ADMIN_PASSWORD`.
+Sign in as that account, then add teammates (with their own email, name,
+password, and role) from **Settings → Team** — there's no self-service sign-up,
+accounts are created by an ops teammate.
 
 For local development with hot reload on both sides:
 
@@ -65,11 +74,17 @@ now), so they show as "—" in the drawer for those rows.
 
 ## Environment variables
 
-| Variable          | Purpose                                          |
-|--------------------|--------------------------------------------------|
-| `PORTAL_PASSWORD`  | Shared password required to log in.               |
-| `SESSION_SECRET`   | Random string used to sign session cookies.       |
-| `PORT`             | Port to listen on (default `3000`).               |
+| Variable                  | Purpose                                                        |
+|----------------------------|-----------------------------------------------------------------|
+| `INITIAL_ADMIN_EMAIL`      | Email for the one `ops` account created on first boot.          |
+| `INITIAL_ADMIN_NAME`       | Display name for that first account.                             |
+| `INITIAL_ADMIN_PASSWORD`   | Password for that first account (min 8 characters).             |
+| `SESSION_SECRET`           | Random string used to sign session cookies.                      |
+| `PORT`                     | Port to listen on (default `3000`).                              |
+
+These three `INITIAL_ADMIN_*` variables are only consulted when the `users`
+table is empty — they don't need to stay set (or accurate) after the first
+account exists.
 
 ## What's real vs. illustrative
 
@@ -98,13 +113,17 @@ didn't hold up as real product logic:
 ## Role model
 
 `ops` sees Overview, Upload, Check, Suppression list, Lists, and API &
-Settings, with full bulk actions (un-suppress, export, create lists/keys).
-`sales` sees only Check a list, My recent checks, and read-only Search — no
-upload, no row selection, no export-suppressed, no un-suppress. This is
-enforced in the UI only (per the brief: "ship a role switcher for demo
-purposes") — there is no separate sales/ops login, so treat this as a demo
-convenience, not an access-control boundary, if you deploy this somewhere
-sensitive.
+Settings, with full bulk actions (un-suppress, export, create lists/keys,
+manage teammates). `sales` sees only Check a list, My recent checks, and
+read-only Search — no upload, no row selection, no export-suppressed, no
+un-suppress.
+
+Each account's role is set once, when an ops teammate creates that account
+(Settings → Team), not something the account holder can change themselves.
+It's enforced both in the UI (routes/buttons hidden per role) and on the
+server (`requireOps` middleware rejects sales-role sessions on the
+upload/un-suppress/export/settings/user-management endpoints even if called
+directly) — so this is a real access boundary, not just a UI convenience.
 
 ## Project structure
 
@@ -139,11 +158,19 @@ fly auth login                            # creates/logs into a Fly.io account (
 fly launch --no-deploy                    # picks up the existing Dockerfile + fly.toml; choose a unique app name
 fly volumes create sieve_data --size 1 --region iad   # match the region you picked
 
-fly secrets set PORTAL_PASSWORD="choose-a-real-password" SESSION_SECRET="$(openssl rand -hex 32)"
+fly secrets set \
+  INITIAL_ADMIN_EMAIL="you@yourcompany.com" \
+  INITIAL_ADMIN_NAME="Your Name" \
+  INITIAL_ADMIN_PASSWORD="choose-a-real-password" \
+  SESSION_SECRET="$(openssl rand -hex 32)"
 
 fly deploy
 fly open   # opens https://<your-app-name>.fly.dev — this is the durable, shareable URL
 ```
+
+Sign in with the `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` you set above,
+then add teammates from Settings → Team — anyone you add can then sign in
+with their own email/password at that same URL.
 
 The volume (`sieve_data`, mounted at `/app/data` per `fly.toml`) is what makes
 the suppression database survive redeploys and restarts — without it, every

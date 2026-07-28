@@ -1,5 +1,6 @@
 const express = require('express');
 const lists = require('../services/lists');
+const { requireOps } = require('./auth');
 
 const router = express.Router();
 
@@ -7,7 +8,7 @@ router.get('/', (req, res) => {
   res.json({ lists: lists.listAll() });
 });
 
-router.post('/', (req, res) => {
+router.post('/', requireOps, (req, res) => {
   const { name, description } = req.body || {};
   if (!name || !name.trim()) return res.status(400).json({ error: 'name is required.' });
   try {

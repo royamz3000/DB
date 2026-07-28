@@ -1,27 +1,21 @@
 const express = require('express');
-const crypto = require('crypto');
+const users = require('../services/users');
 
 const router = express.Router();
 
-function safeEqual(a, b) {
-  const bufA = crypto.createHash('sha256').update(String(a)).digest();
-  const bufB = crypto.createHash('sha256').update(String(b)).digest();
-  return crypto.timingSafeEqual(bufA, bufB);
-}
-
 router.post('/login', (req, res) => {
-  const { password } = req.body || {};
-  const expected = process.env.PORTAL_PASSWORD;
+  const { email, password } = req.body || {};
+  const user = email ? users.findByEmail(email) : null;
 
-  if (!expected) {
-    return res.status(500).json({ error: 'PORTAL_PASSWORD is not configured on the server.' });
-  }
-  if (!password || !safeEqual(password, expected)) {
-    return res.status(401).json({ error: 'Incorrect password.' });
+  if (!user || !password || !users.verifyPassword(password, user.password_hash)) {
+    return res.status(401).json({ error: 'Incorrect email or password.' });
   }
 
-  req.session.authenticated = true;
-  res.json({ ok: true });
+  req.session.userId = user.id;
+  req.session.role = user.role;
+  users.recordLogin(user.id);
+
+  res.json({ ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
 });
 
 router.post('/logout', (req, res) => {
@@ -29,12 +23,34 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/session', (req, res) => {
-  res.json({ authenticated: Boolean(req.session && req.session.authenticated) });
+  if (!req.session || !req.session.userId) return res.json({ authenticated: false });
+  const user = users.findById(req.session.userId);
+  if (!user) return res.json({ authenticated: false });
+  res.json({ authenticated: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+});
+
+router.post('/change-password', (req, res) => {
+  if (!req.session || !req.session.userId) return res.status(401).json({ error: 'Not authenticated.' });
+  const { currentPassword, newPassword } = req.body || {};
+  const user = users.findById(req.session.userId);
+
+  if (!user || !currentPassword || !users.verifyPassword(currentPassword, user.password_hash)) {
+    return res.status(401).json({ error: 'Current password is incorrect.' });
+  }
+
+  const result = users.changePassword(user.id, newPassword);
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  res.json({ ok: true });
 });
 
 function requireAuth(req, res, next) {
-  if (req.session && req.session.authenticated) return next();
+  if (req.session && req.session.userId) return next();
   return res.status(401).json({ error: 'Not authenticated.' });
 }
 
-module.exports = { router, requireAuth };
+function requireOps(req, res, next) {
+  if (req.session && req.session.role === 'ops') return next();
+  return res.status(403).json({ error: 'This action requires an ops account.' });
+}
+
+module.exports = { router, requireAuth, requireOps };

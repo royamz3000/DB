@@ -1,6 +1,7 @@
 const express = require('express');
 const suppressions = require('../services/suppressions');
 const { checkEmailValidity } = require('../services/emailValidation');
+const { requireOps } = require('./auth');
 
 const router = express.Router();
 
@@ -10,7 +11,7 @@ router.get('/', (req, res) => {
   res.json(suppressions.listEntries({ search, reasons, listId, page, pageSize }));
 });
 
-router.get('/export', (req, res) => {
+router.get('/export', requireOps, (req, res) => {
   const { search, listId } = req.query;
   const reasons = req.query.reasons ? String(req.query.reasons).split(',').filter(Boolean) : [];
   const rows = suppressions.listEntriesForExport({ search, reasons, listId });
@@ -36,14 +37,14 @@ router.get('/:id', (req, res) => {
   res.json({ entry, events });
 });
 
-router.post('/unsuppress', (req, res) => {
+router.post('/unsuppress', requireOps, (req, res) => {
   const { ids } = req.body || {};
   if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids must be a non-empty array.' });
   const result = suppressions.unsuppress(ids);
   res.json(result);
 });
 
-router.post('/:id/notes', (req, res) => {
+router.post('/:id/notes', requireOps, (req, res) => {
   const { note } = req.body || {};
   if (!note || !note.trim()) return res.status(400).json({ error: 'note is required.' });
   suppressions.addNote(req.params.id, note.trim());
@@ -55,7 +56,7 @@ router.post('/:id/ask-review', (req, res) => {
   res.json({ ok: true });
 });
 
-router.post('/:id/revalidate', async (req, res) => {
+router.post('/:id/revalidate', requireOps, async (req, res) => {
   const entry = suppressions.getEntryById(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Not found.' });
   const result = await checkEmailValidity(entry.email);

@@ -1,28 +1,24 @@
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo } from 'react';
 
 const RoleContext = createContext(null);
-
-const STORAGE_KEY = 'sieve.role';
 
 export const ROLE_DEFAULT_ROUTE = {
   ops: '/',
   sales: '/check',
 };
 
-export function RoleProvider({ children }) {
-  const [role, setRole] = useState(() => localStorage.getItem(STORAGE_KEY) || 'ops');
-
+// Role now comes from the signed-in user's account (assigned when their
+// account was created), not a self-service toggle — see routes/auth.js's
+// requireOps middleware, which enforces this server-side too.
+export function RoleProvider({ user, children }) {
   const value = useMemo(
     () => ({
-      role,
-      isOps: role === 'ops',
-      isSales: role === 'sales',
-      setRole: (next) => {
-        localStorage.setItem(STORAGE_KEY, next);
-        setRole(next);
-      },
+      role: user.role,
+      isOps: user.role === 'ops',
+      isSales: user.role === 'sales',
+      user,
     }),
-    [role],
+    [user],
   );
 
   return <RoleContext.Provider value={value}>{children}</RoleContext.Provider>;

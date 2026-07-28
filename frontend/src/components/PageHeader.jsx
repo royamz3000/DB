@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { MagnifyingGlass, UploadSimple } from '@phosphor-icons/react';
-import RoleSwitcher from './RoleSwitcher';
+import AccountMenu from './AccountMenu';
 import Button from './Button';
 import { useRole } from '../context/RoleContext';
 
@@ -16,7 +16,7 @@ export default function PageHeader({ kicker, title, subtitle, actions }) {
         {subtitle && <p className="page-header-subtitle">{subtitle}</p>}
       </div>
       <div className="page-header-actions">
-        <RoleSwitcher />
+        <AccountMenu />
         {actions}
         {isOps && (
           <Button variant="secondary" icon={<UploadSimple size={14} />} onClick={() => navigate('/upload')}>

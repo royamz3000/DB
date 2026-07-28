@@ -3,9 +3,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import LoginGate from './components/LoginGate';
 import Sidebar from './components/Sidebar';
 import { ListsProvider } from './context/ListsContext';
+import { RoleProvider, useRole } from './context/RoleContext';
 import { fetchSession } from './api/auth';
 import { registerUnauthorizedHandler } from './api/client';
-import { useRole } from './context/RoleContext';
 
 import Overview from './screens/Overview/Overview';
 import UploadWizard from './screens/Upload/UploadWizard';
@@ -40,21 +40,23 @@ function Shell() {
 }
 
 export default function App() {
-  const [authenticated, setAuthenticated] = useState(null);
+  const [user, setUser] = useState(undefined); // undefined = loading, null = logged out
 
   useEffect(() => {
-    registerUnauthorizedHandler(() => setAuthenticated(false));
+    registerUnauthorizedHandler(() => setUser(null));
     fetchSession()
-      .then((data) => setAuthenticated(data.authenticated))
-      .catch(() => setAuthenticated(false));
+      .then((data) => setUser(data.authenticated ? data.user : null))
+      .catch(() => setUser(null));
   }, []);
 
-  if (authenticated === null) return null;
-  if (!authenticated) return <LoginGate onAuthenticated={() => setAuthenticated(true)} />;
+  if (user === undefined) return null;
+  if (!user) return <LoginGate onAuthenticated={setUser} />;
 
   return (
-    <ListsProvider>
-      <Shell />
-    </ListsProvider>
+    <RoleProvider user={user}>
+      <ListsProvider>
+        <Shell />
+      </ListsProvider>
+    </RoleProvider>
   );
 }

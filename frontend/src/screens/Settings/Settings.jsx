@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Copy, Eye, EyeSlash } from '@phosphor-icons/react';
+import { Copy } from '@phosphor-icons/react';
 import PageHeader from '../../components/PageHeader';
 import Card, { PanelHead } from '../../components/Card';
 import Button from '../../components/Button';
 import IconButton from '../../components/IconButton';
 import CheckboxRow from '../../components/Checkbox';
+import { SelectField } from '../../components/Field';
 import { fetchApiKeys, createApiKey } from '../../api/apiKeys';
 import { fetchWebhookSettings, updateWebhookSettings } from '../../api/settings';
+import { fetchUsers, createUser, deleteUser } from '../../api/users';
+import { useRole } from '../../context/RoleContext';
 import { useToast } from '../../context/ToastContext';
 import './Settings.css';
 
@@ -24,17 +27,49 @@ function relativeTime(iso) {
   return `used ${new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
 }
 
+const emptyNewUser = { name: '', email: '', password: '', role: 'sales' };
+
 export default function Settings() {
   const showToast = useToast();
+  const { user: currentUser } = useRole();
   const [keys, setKeys] = useState([]);
   const [revealed, setRevealed] = useState(new Set());
   const [webhooks, setWebhooks] = useState(null);
-  const [creating, setCreating] = useState(false);
+
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [addingMember, setAddingMember] = useState(false);
+  const [newUser, setNewUser] = useState(emptyNewUser);
+  const [teamError, setTeamError] = useState('');
+
+  const loadTeam = () => fetchUsers().then((d) => setTeamMembers(d.users));
 
   useEffect(() => {
     fetchApiKeys().then((d) => setKeys(d.keys));
     fetchWebhookSettings().then(setWebhooks);
+    loadTeam();
   }, []);
+
+  const submitNewUser = async (e) => {
+    e.preventDefault();
+    setTeamError('');
+    try {
+      await createUser(newUser);
+      setNewUser(emptyNewUser);
+      setAddingMember(false);
+      loadTeam();
+    } catch (err) {
+      setTeamError(err.message);
+    }
+  };
+
+  const removeMember = async (member) => {
+    try {
+      await deleteUser(member.id);
+      loadTeam();
+    } catch (err) {
+      showToast(err.message);
+    }
+  };
 
   const toggleReveal = (id) => {
     setRevealed((prev) => {
@@ -67,6 +102,60 @@ export default function Settings() {
       <PageHeader kicker="API & settings" title="API keys & automation" subtitle="Check addresses from your own app, and decide what happens when an import finishes." />
 
       <Card>
+        <PanelHead
+          title="Team"
+          meta="Who can sign in, and what they can do"
+          actions={<Button variant="primary" onClick={() => setAddingMember((v) => !v)}>Add teammate</Button>}
+        />
+
+        {addingMember && (
+          <form
+            onSubmit={submitNewUser}
+            style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}
+          >
+            <label className="field">
+              <span className="field-label">Name</span>
+              <input className="input" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} required />
+            </label>
+            <label className="field">
+              <span className="field-label">Email</span>
+              <input type="email" className="input" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} required />
+            </label>
+            <label className="field">
+              <span className="field-label">Password</span>
+              <input type="password" className="input" minLength={8} value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} required />
+            </label>
+            <SelectField label="Role" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}>
+              <option value="sales">Sales rep</option>
+              <option value="ops">Email ops</option>
+            </SelectField>
+            <Button type="submit">Create account</Button>
+          </form>
+        )}
+        {teamError && <p className="text-caption" style={{ color: 'oklch(0.66 0.125 25)', marginBottom: 12 }}>{teamError}</p>}
+
+        <div>
+          {teamMembers.map((member) => (
+            <div key={member.id} className="keys-row" style={{ gridTemplateColumns: '1.3fr 1.3fr 0.7fr 130px' }}>
+              <div className="text-table">{member.name}</div>
+              <div className="text-secondary muted">{member.email}</div>
+              <div className="text-caption">{member.role === 'ops' ? 'Email ops' : 'Sales rep'}</div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <Button
+                  variant="ghost"
+                  dense
+                  onClick={() => removeMember(member)}
+                  disabled={member.id === currentUser.id}
+                >
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card className="settings-section">
         <PanelHead title="API keys" actions={<Button variant="primary" onClick={addKey}>Create key</Button>} />
         <div>
           {keys.map((key) => {

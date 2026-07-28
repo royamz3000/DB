@@ -5,7 +5,7 @@ const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
 
-const { router: authRouter, requireAuth } = require('./routes/auth');
+const { router: authRouter, requireAuth, requireOps } = require('./routes/auth');
 const listsRouter = require('./routes/lists');
 const suppressionsRouter = require('./routes/suppressions');
 const checksRouter = require('./routes/checks');
@@ -13,9 +13,12 @@ const jobsRouter = require('./routes/jobs');
 const apiKeysRouter = require('./routes/apiKeys');
 const settingsRouter = require('./routes/settings');
 const statsRouter = require('./routes/stats');
+const usersRouter = require('./routes/users');
 const { seedIfEmpty } = require('./services/seed');
+const { bootstrapInitialAdminIfEmpty } = require('./services/users');
 
 seedIfEmpty();
+bootstrapInitialAdminIfEmpty();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,10 +50,11 @@ app.use('/api/auth', authRouter);
 app.use('/api/lists', requireAuth, listsRouter);
 app.use('/api/suppressions', requireAuth, suppressionsRouter);
 app.use('/api/checks', requireAuth, checksRouter);
-app.use('/api/jobs', requireAuth, jobsRouter);
-app.use('/api/api-keys', requireAuth, apiKeysRouter);
-app.use('/api/settings', requireAuth, settingsRouter);
-app.use('/api/stats', requireAuth, statsRouter);
+app.use('/api/jobs', requireAuth, requireOps, jobsRouter);
+app.use('/api/api-keys', requireAuth, requireOps, apiKeysRouter);
+app.use('/api/settings', requireAuth, requireOps, settingsRouter);
+app.use('/api/stats', requireAuth, requireOps, statsRouter);
+app.use('/api/users', requireAuth, requireOps, usersRouter);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
 
 const distDir = path.join(__dirname, '..', 'frontend', 'dist');

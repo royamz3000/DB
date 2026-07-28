@@ -3,6 +3,7 @@ import Button from './Button';
 import { login } from '../api/auth';
 
 export default function LoginGate({ onAuthenticated }) {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -12,8 +13,8 @@ export default function LoginGate({ onAuthenticated }) {
     setError('');
     setBusy(true);
     try {
-      await login(password);
-      onAuthenticated();
+      const { user } = await login(email, password);
+      onAuthenticated(user);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -32,12 +33,20 @@ export default function LoginGate({ onAuthenticated }) {
           <span className="brand-mark" />
           <span className="text-panel">Sieve</span>
         </div>
-        <p className="text-secondary muted">Enter the shared password to continue.</p>
+        <p className="text-secondary muted">Sign in with your account to continue.</p>
+        <input
+          type="email"
+          className="input"
+          placeholder="Email"
+          autoFocus
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
         <input
           type="password"
           className="input"
           placeholder="Password"
-          autoFocus
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
