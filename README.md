@@ -1,26 +1,21 @@
-# Email Suppression Portal
+# Sieve — email suppression & validation portal
 
-An internal portal for managing email suppression lists (bounced and unsubscribed
-addresses) and checking whether individual emails are invalid or suppressed
-before you send to them.
+An internal portal for an email-ops team to upload bounced/unsubscribed address
+lists into named suppression lists, and for anyone (ops or sales) to check
+individual addresses — pasted or imported from a file — for validity and
+suppression status before sending to them.
 
-## Features
+## Stack
 
-- **Upload lists** — CSV upload of bounced or unsubscribed addresses, with an
-  optional `reason` column. Duplicate rows are deduplicated and existing
-  entries are refreshed rather than duplicated.
-- **Lookup tool** — paste a list of emails or upload a CSV/TXT file to check,
-  for each address: syntax validity, whether its domain has a mail server
-  (MX/A record lookup), and whether it's on the bounced or unsubscribed list.
-- **Browse & manage** — search/filter the full suppression list and remove
-  entries.
-- **Import history** — audit trail of every upload (file name, source, counts).
-- **Shared-password gate** — single password protects the whole portal via a
-  server-side session cookie.
-
-## Requirements
-
-- Node.js 18+ (uses `better-sqlite3`, no separate database server needed)
+- **Backend**: Node.js + Express + SQLite (`better-sqlite3`), no external
+  services required.
+- **Frontend**: React + Vite SPA (React Router, plain CSS design-token
+  system, `@phosphor-icons/react`), built as static assets the Express
+  server serves.
+- **Auth**: a single shared password gates the whole app (session cookie).
+  The ops/sales "role switcher" in the header is a client-side UI mode for
+  demo purposes, not a separate authentication system — anyone who knows the
+  shared password can flip between views.
 
 ## Setup
 
@@ -28,13 +23,23 @@ before you send to them.
 npm install
 cp .env.example .env
 # edit .env: set PORTAL_PASSWORD and SESSION_SECRET to real values
-npm start
+npm run build   # builds the frontend into frontend/dist
+npm start        # serves the API + built SPA on PORT (default 3000)
 ```
 
-Then open `http://localhost:3000` and log in with `PORTAL_PASSWORD`.
+For local development with hot reload on both sides:
 
-The SQLite database file is created automatically at `data/suppression.db`
-(ignored by git).
+```bash
+npm install
+npm run dev   # runs the Express API (--watch) and the Vite dev server together
+```
+
+The Vite dev server proxies `/api/*` to the Express server on port 3000, so
+visit whatever port Vite prints (usually 5173) during development.
+
+The SQLite database lives at `data/sieve.db` (git-ignored) and is seeded
+automatically with a small, realistic demo dataset the first time the server
+starts against an empty database.
 
 ## Environment variables
 
@@ -44,62 +49,62 @@ The SQLite database file is created automatically at `data/suppression.db`
 | `SESSION_SECRET`   | Random string used to sign session cookies.       |
 | `PORT`             | Port to listen on (default `3000`).               |
 
-## CSV format
+## What's real vs. illustrative
 
-Bounced/unsubscribed uploads accept a CSV with an `email` column (case-insensitive
-header match: `email`, `email address`, `e-mail`, `address`) and an optional
-`reason` column. If no recognized header row is found, the first column of
-every row is treated as the email address.
+Every number in the UI is computed from a real SQLite query against seeded
+demo data — nothing is hardcoded. A few spots were deliberately adapted from
+the original design brief because the literal numbers/behavior in that brief
+didn't hold up as real product logic:
 
-## What "invalid" means here
+- **Upload results**: a suppression-list import only ever suppresses (that's
+  the whole point of the screen — "everything in it is suppressed for good").
+  So the completion screen reports **Suppressed / Already listed / Invalid
+  syntax / Blank rows** — there's no "Clean, safe to send" bucket, since a
+  bounce/unsubscribe file uploaded here isn't being validated for
+  deliverability, it's being suppressed outright.
+- **Overview stat deltas**: shown deltas (e.g. "+N this week") are computed
+  from real `created_at` timestamps. A fabricated multi-week trend line
+  (e.g. "vs last month") isn't shown, since there isn't real historical data
+  to back a comparison like that honestly.
+- **"Also run syntax + domain validation" (upload wizard)**: always checks
+  basic email syntax (a malformed address can't be inserted). The checkbox
+  additionally runs a DNS/MX lookup per unique domain (cached in-process) and
+  raises the risk score for addresses whose domain doesn't resolve — it
+  doesn't block suppression, since a bounce file's whole purpose is to
+  suppress addresses regardless of current domain validity.
 
-Each looked-up email gets two independent signals:
+## Role model
 
-1. **Syntax** — a practical (not full RFC 5322) regex check.
-2. **Mail server** — an MX record lookup for the domain (falling back to an
-   A/AAAA lookup for domains that accept mail without an MX record). This
-   catches typo'd/nonexistent domains without doing an SMTP handshake, so it
-   works from any network and costs nothing.
-
-This is a good first filter, but it can't tell you a specific mailbox has
-been closed — that's what the suppression list (real bounces reported by your
-mail sender) is for.
-
-## Pulling in Salesforce / Constant Contact / other bounce & unsubscribe data
-
-The portal's data model doesn't care where a suppression entry came from — every
-row has a `source` field (e.g. `manual-upload`, `salesforce`, `constant-contact`).
-The manual CSV upload path in the UI is one way to populate it; a scheduled job
-that calls the Salesforce or Constant Contact API and pulls their bounce/
-unsubscribe reports is another. Both should go through the same insertion path:
-
-```js
-const { addSuppressionsBulk, recordImport } = require('./src/services/suppressions');
-
-const records = fetchedRecordsFromApi.map((r) => ({ email: r.email, reason: r.reason }));
-const summary = addSuppressionsBulk(records, { type: 'bounced', source: 'salesforce' });
-recordImport({ filename: null, type: 'bounced', source: 'salesforce', totalRows: summary.total,
-  addedCount: summary.added, duplicateCount: summary.duplicates, invalidCount: summary.invalid });
-```
-
-This isn't wired up to any specific API yet — connecting it just means writing
-a small script/cron job that fetches records and calls the function above with
-the right `type` (`bounced` or `unsubscribed`) and `source`.
+`ops` sees Overview, Upload, Check, Suppression list, Lists, and API &
+Settings, with full bulk actions (un-suppress, export, create lists/keys).
+`sales` sees only Check a list, My recent checks, and read-only Search — no
+upload, no row selection, no export-suppressed, no un-suppress. This is
+enforced in the UI only (per the brief: "ship a role switcher for demo
+purposes") — there is no separate sales/ops login, so treat this as a demo
+convenience, not an access-control boundary, if you deploy this somewhere
+sensitive.
 
 ## Project structure
 
 ```
 src/
-  server.js               Express app entry point
-  db.js                   SQLite connection + schema
-  routes/
-    auth.js               login/logout/session + requireAuth middleware
-    suppressions.js        list/add/delete/upload/import-history endpoints
-    lookup.js              batch email lookup endpoints
-  services/
-    emailValidation.js     syntax + MX/domain checks
-    suppressions.js        suppression list read/write logic
-    importParser.js        CSV/plain-text parsing
-public/
-  index.html, css/, js/     plain HTML/JS frontend (no build step)
+  server.js                Express app entry point (serves API + built SPA)
+  db.js                     SQLite connection + schema
+  routes/                   auth, lists, suppressions, checks, jobs, apiKeys, settings, stats
+  services/                 matching business logic modules + seed.js
+frontend/
+  src/
+    App.jsx, main.jsx        routing + providers
+    context/                 RoleContext, ListsContext, ToastContext
+    components/              design-system primitives (Button, Card, Drawer, DataTable, ...)
+    styles/                  tokens.css (design tokens), global.css, components.css
+    screens/                 CheckEmails, Suppressions, Upload, Overview, Lists, Settings, Checks
+    api/                     thin fetch wrappers per backend route group
 ```
+
+## Large imports
+
+Import files are streamed from disk (not buffered in memory) and processed
+in chunks with periodic event-loop yields, so the server stays responsive
+during large imports and multi-million-row files don't need to fit in RAM.
+Progress is polled from `GET /api/jobs/:id` by the upload wizard's step 3.

@@ -1,0 +1,64 @@
+.overview-body {
+  display: grid;
+  grid-template-columns: 1.55fr 1fr;
+  gap: 24px;
+  align-items: start;
+  margin-top: 24px;
+}
+
+.file-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.file-cell-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.file-cell-meta {
+  padding-left: 0;
+}
+
+.status-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.quick-check-row {
+  display: flex;
+  gap: 10px;
+}
+
+.quick-result-card {
+  margin-top: 14px;
+  padding: 13px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(22, 24, 38, 0.7);
+  border: 1px solid rgba(233, 233, 237, 0.12);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.quick-result-card:hover {
+  border-color: var(--accent-tint-30-border);
+}
+
+.reason-row {
+  margin-bottom: 14px;
+}
+.reason-row-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+.reason-row-label-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

@@ -1,11 +1,15 @@
 {
-  "name": "email-suppression-portal",
+  "name": "sieve-portal",
   "version": "1.0.0",
-  "description": "Internal portal for managing bounced/unsubscribed email suppression lists and looking up email validity/suppression status.",
+  "description": "Sieve — email suppression & validation portal. Upload bounced/unsubscribed lists, check addresses before you send, browse and manage suppression lists.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev:server": "node --watch src/server.js",
+    "dev:client": "npm run dev --prefix frontend",
+    "dev": "concurrently -n server,client -c blue,magenta \"npm run dev:server\" \"npm run dev:client\"",
+    "build": "npm install --prefix frontend && npm run build --prefix frontend",
+    "seed:reset": "node -e \"require('fs').rmSync('data/sieve.db',{force:true}); require('fs').rmSync('data/sieve.db-wal',{force:true}); require('fs').rmSync('data/sieve.db-shm',{force:true}); require('./src/services/seed').seedIfEmpty();\""
   },
   "license": "UNLICENSED",
   "private": true,
@@ -16,5 +20,8 @@
     "express": "^4.21.2",
     "express-session": "^1.18.1",
     "multer": "^2.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
   }
 }

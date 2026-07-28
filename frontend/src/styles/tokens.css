@@ -1,0 +1,46 @@
+:root {
+  --bg: #161826;
+  --surface: #232532;
+  --sunken: #1b1d2b;
+  --text: #e9e9ed;
+  --text-muted: rgba(233, 233, 237, 0.6);
+  --text-faint: rgba(233, 233, 237, 0.45);
+  --control-border: rgba(233, 233, 237, 0.16);
+  --row-rule: rgba(233, 233, 237, 0.07);
+  --header-rule: rgba(233, 233, 237, 0.14);
+  --sidebar-rule: rgba(233, 233, 237, 0.1);
+
+  --accent: #9184d9;
+  --accent-light: #d2cefd;
+  --accent-tint-10: rgba(145, 132, 217, 0.1);
+  --accent-tint-12: rgba(145, 132, 217, 0.12);
+  --accent-tint-18: rgba(145, 132, 217, 0.18);
+  --accent-tint-22: rgba(145, 132, 217, 0.22);
+  --accent-tint-30-border: rgba(145, 132, 217, 0.3);
+
+  --shadow-card-edge: 0 0 0 1px #3f424d;
+  --shadow-raised: 0 0 0 1px #595d6c, 0 6px 18px rgba(0, 0, 0, 0.55);
+  --shadow-drawer: 0 0 0 1px #9397ab, -16px 0 40px rgba(0, 0, 0, 0.65);
+  --shadow-toast: 0 0 0 1px #9397ab, 0 16px 40px rgba(0, 0, 0, 0.65);
+
+  --hue-hard_bounce: 25;
+  --hue-soft_bounce: 70;
+  --hue-unsubscribed: 289;
+  --hue-spam_complaint: 350;
+  --hue-catch_all_risky: 110;
+  --hue-global_blocklist: 250;
+  --hue-clean: 155;
+
+  --font-sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, Menlo, "SF Mono", Consolas, monospace;
+
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+
+  --sidebar-width: 248px;
+  --page-gutter: 40px;
+  --panel-pad: 22px;
+}

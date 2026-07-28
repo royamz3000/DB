@@ -1,5 +1,11 @@
 node_modules/
 data/*.db
 data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/staging/*
+!data/staging/.gitkeep
+data/reports/*
+!data/reports/.gitkeep
 .env
 *.log

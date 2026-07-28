@@ -1,0 +1,57 @@
+.check-grid {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 24px;
+  align-items: start;
+}
+
+.check-textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  background: var(--sunken);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  resize: vertical;
+}
+.check-textarea:focus {
+  border-color: var(--accent);
+}
+
+.check-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.check-toolbar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.batch-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 13.5px;
+}
+.batch-summary-row-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.batch-summary-value {
+  font-weight: 500;
+}
+
+.verdict-cell {
+  font-size: 12.5px;
+  font-weight: 500;
+}

@@ -1,0 +1,31 @@
+.keys-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 0.9fr 130px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--row-rule);
+}
+.keys-row:first-child {
+  padding-top: 0;
+}
+
+.code-block {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: var(--sunken);
+  border: 1px solid rgba(233, 233, 237, 0.12);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.settings-section {
+  margin-top: 28px;
+}
+
+.webhook-field {
+  margin-bottom: 18px;
+}

@@ -1,0 +1,15 @@
+.checks-row-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.checks-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.notice-footer {
+  margin-top: 18px;
+}

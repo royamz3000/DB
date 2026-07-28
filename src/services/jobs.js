@@ -1,0 +1,263 @@
+const fs = require('fs');
+const path = require('path');
+const readline = require('readline');
+const crypto = require('crypto');
+const db = require('../db');
+const { stagingDir } = require('../db');
+const { normalizeEmail, hasValidSyntax, checkEmailValidity } = require('./emailValidation');
+const { addEntriesBulk, riskScoreFor } = require('./suppressions');
+const { notifyWebhookIfEnabled } = require('./settings');
+
+const reportsDir = path.join(__dirname, '..', '..', 'data', 'reports');
+if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+
+const CHUNK_SIZE = 1000;
+
+const EMAIL_HEADER_HINTS = ['email', 'email_address', 'email address', 'e-mail', 'address'];
+const REASON_HEADER_HINTS = ['reason', 'bounce_type', 'bounce_reason', 'suppression reason', 'suppression_reason'];
+const DATE_HEADER_HINTS = ['date', 'event_date', 'date added', 'added_at', 'created_at'];
+const ADDED_BY_HEADER_HINTS = ['added_by', 'user', 'owner', 'campaign_id'];
+
+const FILE_KIND_DEFAULT_REASON = {
+  bounced: 'hard_bounce',
+  unsubscribes: 'unsubscribed',
+  spam_complaints: 'spam_complaint',
+  do_not_contact: 'global_blocklist',
+};
+
+function detectDelimiter(headerLine) {
+  const tabCount = (headerLine.match(/\t/g) || []).length;
+  const commaCount = (headerLine.match(/,/g) || []).length;
+  return tabCount > commaCount ? '\t' : ',';
+}
+
+function splitLine(line, delimiter) {
+  return line.split(delimiter).map((c) => c.trim().replace(/^"|"$/g, ''));
+}
+
+function inferReasonFromText(text, fallback) {
+  const t = (text || '').toLowerCase();
+  if (!t) return fallback;
+  if (t.includes('hard')) return 'hard_bounce';
+  if (t.includes('soft')) return 'soft_bounce';
+  if (t.includes('unsub')) return 'unsubscribed';
+  if (t.includes('complaint') || t.includes('spam')) return 'spam_complaint';
+  if (t.includes('risky') || t.includes('catch')) return 'catch_all_risky';
+  if (t.includes('block')) return 'global_blocklist';
+  return fallback;
+}
+
+function stagingPathFor(id) {
+  return path.join(stagingDir, id);
+}
+
+function newStagingId(originalName) {
+  const ext = path.extname(originalName) || '.csv';
+  return `${crypto.randomBytes(12).toString('hex')}${ext}`;
+}
+
+async function previewStagedFile(stagingId) {
+  const stagedPath = stagingPathFor(stagingId);
+  const stats = fs.statSync(stagedPath);
+  const rl = readline.createInterface({ input: fs.createReadStream(stagedPath, { encoding: 'utf8' }), crlfDelay: Infinity });
+
+  let header = null;
+  let delimiter = ',';
+  const sampleRows = [];
+  let rowCount = 0;
+
+  for await (const line of rl) {
+    if (line.trim() === '') continue;
+    if (!header) {
+      delimiter = detectDelimiter(line);
+      header = splitLine(line, delimiter);
+      continue;
+    }
+    rowCount += 1;
+    if (sampleRows.length < 5) sampleRows.push(splitLine(line, delimiter));
+  }
+
+  const columns = (header || []).map((name, index) => ({
+    index,
+    name,
+    samples: sampleRows.map((row) => row[index] || ''),
+  }));
+
+  const guess = (hints) => {
+    const idx = (header || []).findIndex((h) => hints.includes(h.trim().toLowerCase()));
+    return idx === -1 ? null : idx;
+  };
+
+  return {
+    sizeBytes: stats.size,
+    rowCount,
+    columns,
+    guessedMapping: {
+      emailCol: guess(EMAIL_HEADER_HINTS),
+      reasonCol: guess(REASON_HEADER_HINTS),
+      dateCol: guess(DATE_HEADER_HINTS),
+      addedByCol: guess(ADDED_BY_HEADER_HINTS),
+    },
+  };
+}
+
+function createJobRecord({ filename, listId, fileKind, defaultReason, validateSyntax, totalRows }) {
+  const result = db.prepare(`
+    INSERT INTO import_jobs (filename, list_id, file_kind, default_reason, validate_syntax, total_rows)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(filename, listId, fileKind, defaultReason, validateSyntax ? 1 : 0, totalRows);
+  return result.lastInsertRowid;
+}
+
+function getJob(id) {
+  return db.prepare(`
+    SELECT j.*, l.name AS list_name
+    FROM import_jobs j JOIN lists l ON l.id = j.list_id
+    WHERE j.id = ?
+  `).get(id);
+}
+
+function listJobs({ page = 1, pageSize = 25 } = {}) {
+  const limit = Math.min(Math.max(Number(pageSize) || 25, 1), 100);
+  const offset = (Math.max(Number(page) || 1, 1) - 1) * limit;
+  const total = db.prepare('SELECT COUNT(*) AS c FROM import_jobs').get().c;
+  const rows = db.prepare(`
+    SELECT j.*, l.name AS list_name
+    FROM import_jobs j JOIN lists l ON l.id = j.list_id
+    ORDER BY j.started_at DESC LIMIT ? OFFSET ?
+  `).all(limit, offset);
+  return { rows, total, page: Number(page) || 1, pageSize: limit };
+}
+
+function updateProgress(jobId, patch) {
+  const fields = Object.keys(patch).map((k) => `${k} = @${k}`).join(', ');
+  db.prepare(`UPDATE import_jobs SET ${fields} WHERE id = @id`).run({ id: jobId, ...patch });
+}
+
+function writeSkippedReport(jobId, skippedRows) {
+  if (skippedRows.length === 0) return null;
+  const relPath = `job-${jobId}-skipped.csv`;
+  const lines = ['email,reason_skipped', ...skippedRows.map((r) => `"${(r.email || '').replace(/"/g, '""')}",${r.reasonSkipped}`)];
+  fs.writeFileSync(path.join(reportsDir, relPath), lines.join('\n'));
+  return relPath;
+}
+
+function skippedReportPath(relPath) {
+  return path.join(reportsDir, relPath);
+}
+
+async function startImportJob(jobId, { emailCol, reasonCol, listId, defaultReason, validateSyntax, filename }) {
+  const startedAt = Date.now();
+  const stagedPath = path.join(stagingDir, `job-${jobId}${path.extname(filename) || '.csv'}`);
+
+  let processed = 0;
+  let suppressed = 0;
+  let duplicates = 0;
+  let invalid = 0;
+  let blank = 0;
+  const skippedRows = [];
+  let chunkBuffer = [];
+
+  const flush = () => {
+    if (chunkBuffer.length === 0) return;
+    const { added, duplicates: dupes } = addEntriesBulk(chunkBuffer, { listId, source: 'upload', addedBy: 'ops@workspace' });
+    suppressed += added;
+    duplicates += dupes;
+    chunkBuffer = [];
+  };
+
+  try {
+    const rl = readline.createInterface({ input: fs.createReadStream(stagedPath, { encoding: 'utf8' }), crlfDelay: Infinity });
+    let isHeader = true;
+    let delimiter = ',';
+
+    for await (const line of rl) {
+      if (isHeader) {
+        delimiter = detectDelimiter(line);
+        isHeader = false;
+        continue;
+      }
+      if (line.trim() === '') {
+        blank += 1;
+        processed += 1;
+        continue;
+      }
+
+      const cols = splitLine(line, delimiter);
+      const rawEmail = cols[emailCol] ?? '';
+      const email = normalizeEmail(rawEmail);
+      processed += 1;
+
+      if (!email || !hasValidSyntax(email)) {
+        invalid += 1;
+        skippedRows.push({ email: rawEmail, reasonSkipped: 'invalid_syntax' });
+      } else {
+        const rawReasonText = reasonCol != null ? cols[reasonCol] : null;
+        const reason = inferReasonFromText(rawReasonText, defaultReason);
+        let riskScoreOverride = riskScoreFor(reason);
+
+        if (validateSyntax) {
+          const validity = await checkEmailValidity(email);
+          if (!validity.hasMailServer) riskScoreOverride = 99;
+        }
+
+        chunkBuffer.push({ email, reason, riskScoreOverride });
+      }
+
+      if (processed % CHUNK_SIZE === 0) {
+        flush();
+        updateProgress(jobId, {
+          processed_rows: processed,
+          suppressed_count: suppressed,
+          duplicate_count: duplicates,
+          invalid_count: invalid,
+          blank_count: blank,
+        });
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
+
+    flush();
+    const skippedPath = writeSkippedReport(jobId, skippedRows.slice(0, 50000));
+
+    updateProgress(jobId, {
+      status: 'complete',
+      processed_rows: processed,
+      suppressed_count: suppressed,
+      duplicate_count: duplicates,
+      invalid_count: invalid,
+      blank_count: blank,
+      skipped_report_path: skippedPath,
+      finished_at: new Date().toISOString(),
+      duration_ms: Date.now() - startedAt,
+    });
+
+    fs.unlink(stagedPath, () => {});
+
+    const job = getJob(jobId);
+    notifyWebhookIfEnabled({
+      event: 'import.completed',
+      jobId,
+      filename: job.filename,
+      list: job.list_name,
+      suppressed,
+      duplicates,
+      invalid,
+      blank,
+    }).catch(() => {});
+  } catch (err) {
+    updateProgress(jobId, { status: 'failed', error_message: err.message, finished_at: new Date().toISOString() });
+  }
+}
+
+module.exports = {
+  stagingPathFor,
+  newStagingId,
+  previewStagedFile,
+  createJobRecord,
+  getJob,
+  listJobs,
+  startImportJob,
+  skippedReportPath,
+  FILE_KIND_DEFAULT_REASON,
+};

@@ -1,79 +1,66 @@
 const express = require('express');
-const multer = require('multer');
 const suppressions = require('../services/suppressions');
-const { parseCsvBuffer } = require('../services/importParser');
+const { checkEmailValidity } = require('../services/emailValidation');
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
-
-const VALID_TYPES = new Set(['bounced', 'unsubscribed']);
-
-router.get('/stats', (req, res) => {
-  res.json(suppressions.getStats());
-});
-
-router.get('/imports', (req, res) => {
-  const { page, pageSize } = req.query;
-  res.json(suppressions.listImports({ page, pageSize }));
-});
 
 router.get('/', (req, res) => {
-  const { type, search, page, pageSize } = req.query;
-  res.json(suppressions.listSuppressions({ type, search, page, pageSize }));
+  const { search, listId, page, pageSize } = req.query;
+  const reasons = req.query.reasons ? String(req.query.reasons).split(',').filter(Boolean) : [];
+  res.json(suppressions.listEntries({ search, reasons, listId, page, pageSize }));
 });
 
-router.post('/', (req, res) => {
-  const { email, type, source, reason } = req.body || {};
-  if (!VALID_TYPES.has(type)) {
-    return res.status(400).json({ error: 'type must be "bounced" or "unsubscribed".' });
+router.get('/export', (req, res) => {
+  const { search, listId } = req.query;
+  const reasons = req.query.reasons ? String(req.query.reasons).split(',').filter(Boolean) : [];
+  const rows = suppressions.listEntriesForExport({ search, reasons, listId });
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="suppressed.csv"');
+  res.write('email,reason,list,added_by,added_at,risk_score\n');
+  for (const r of rows) {
+    res.write(`"${r.email}",${r.reason},"${r.list_name}","${r.added_by}",${r.created_at},${r.risk_score}\n`);
   }
-  const result = suppressions.addSuppression({ email, type, source: source || 'manual', reason });
-  if (!result.ok) return res.status(400).json({ error: result.error });
+  res.end();
+});
+
+router.get('/:id', (req, res) => {
+  const entry = suppressions.getEntryById(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Not found.' });
+  const events = suppressions.getEventsForEntry(req.params.id);
+  res.json({ entry, events });
+});
+
+router.post('/unsuppress', (req, res) => {
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids must be a non-empty array.' });
+  const result = suppressions.unsuppress(ids);
   res.json(result);
 });
 
-router.delete('/:id', (req, res) => {
-  const ok = suppressions.deleteSuppression(Number(req.params.id));
-  if (!ok) return res.status(404).json({ error: 'Not found.' });
+router.post('/:id/notes', (req, res) => {
+  const { note } = req.body || {};
+  if (!note || !note.trim()) return res.status(400).json({ error: 'note is required.' });
+  suppressions.addNote(req.params.id, note.trim());
   res.json({ ok: true });
 });
 
-router.post('/upload', upload.single('file'), (req, res) => {
-  const { type, source } = req.body || {};
-  if (!VALID_TYPES.has(type)) {
-    return res.status(400).json({ error: 'type must be "bounced" or "unsubscribed".' });
-  }
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded.' });
-  }
+router.post('/:id/ask-review', (req, res) => {
+  suppressions.requestReview(req.params.id);
+  res.json({ ok: true });
+});
 
-  let records;
-  try {
-    records = parseCsvBuffer(req.file.buffer);
-  } catch (err) {
-    return res.status(400).json({ error: `Could not parse file: ${err.message}` });
-  }
-
-  if (records.length === 0) {
-    return res.status(400).json({ error: 'No email addresses found in the file.' });
-  }
-
-  const summary = suppressions.addSuppressionsBulk(records, {
-    type,
-    source: source || 'manual-upload',
-  });
-
-  suppressions.recordImport({
-    filename: req.file.originalname,
-    type,
-    source: source || 'manual-upload',
-    totalRows: summary.total,
-    addedCount: summary.added,
-    duplicateCount: summary.duplicates,
-    invalidCount: summary.invalid,
-  });
-
-  res.json(summary);
+router.post('/:id/revalidate', async (req, res) => {
+  const entry = suppressions.getEntryById(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Not found.' });
+  const result = await checkEmailValidity(entry.email);
+  suppressions.logEvent(
+    req.params.id,
+    'revalidated',
+    result.valid ? 'Domain resolves; still listed on this suppression list.' : 'Domain still does not resolve.',
+    'ops@workspace',
+  );
+  res.json({ ok: true, result });
 });
 
 module.exports = router;
