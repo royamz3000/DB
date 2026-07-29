@@ -14,8 +14,10 @@ const apiKeysRouter = require('./routes/apiKeys');
 const settingsRouter = require('./routes/settings');
 const statsRouter = require('./routes/stats');
 const usersRouter = require('./routes/users');
+const integrationsRouter = require('./routes/integrations');
 const { seedIfEmpty } = require('./services/seed');
 const { bootstrapInitialAdminIfEmpty } = require('./services/users');
+const constantContact = require('./services/constantContact');
 
 seedIfEmpty();
 bootstrapInitialAdminIfEmpty();
@@ -55,6 +57,7 @@ app.use('/api/api-keys', requireAuth, requireOps, apiKeysRouter);
 app.use('/api/settings', requireAuth, requireOps, settingsRouter);
 app.use('/api/stats', requireAuth, requireOps, statsRouter);
 app.use('/api/users', requireAuth, requireOps, usersRouter);
+app.use('/api/integrations', requireAuth, requireOps, integrationsRouter);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
 
 const distDir = path.join(__dirname, '..', 'frontend', 'dist');
@@ -62,6 +65,11 @@ if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
   app.get('*', (req, res) => res.sendFile(path.join(distDir, 'index.html')));
 }
+
+const SYNC_INTERVAL_MS = 30 * 60 * 1000;
+setInterval(() => {
+  constantContact.runSyncAll().catch((err) => console.warn('Constant Contact scheduled sync failed:', err.message));
+}, SYNC_INTERVAL_MS);
 
 app.listen(PORT, () => {
   console.log(`Bizcap portal listening on http://localhost:${PORT}`);

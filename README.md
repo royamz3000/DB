@@ -72,6 +72,39 @@ more columns into it would break that fidelity. Manually-added entries and
 entries added via the API don't set these fields (they're CSV-import-only for
 now), so they show as "—" in the drawer for those rows.
 
+## Connecting Constant Contact directly (Settings → Constant Contact)
+
+Besides CSV upload, ops can connect one or more real Constant Contact
+accounts (e.g. one per brand or team) so new unsubscribes (and, best-effort,
+bounces) sync in automatically every 30 minutes, or on demand via "Sync now."
+Each connected account has its own destination list, and each syncs
+independently — one account's sync failing (expired token, API error) doesn't
+block the others. Reconnecting the same Constant Contact account updates its
+existing connection in place rather than creating a duplicate (matched by the
+account's contact email via `GET /v3/account/summary`).
+
+**Setup** (one-time, needs your own Constant Contact developer account):
+1. Register an app at [developer.constantcontact.com](https://developer.constantcontact.com)
+   to get a Client ID and Client Secret.
+2. Set its redirect URI to `<your deployed URL>/api/integrations/constant-contact/callback`
+   — this must be a real public HTTPS URL; Constant Contact's OAuth flow
+   won't redirect to `localhost`, which is one reason getting this deployed
+   (see below) comes before connecting Constant Contact.
+3. Set `CONSTANT_CONTACT_CLIENT_ID`, `CONSTANT_CONTACT_CLIENT_SECRET`, and
+   `APP_BASE_URL` (your deployed URL) as environment variables.
+4. From Settings → Constant Contact, click Connect, choose which suppression
+   list new entries land in, and sync.
+
+**An honest caveat**: the unsubscribe sync (`GET /v3/contacts?status=unsubscribed`)
+is solidly documented in Constant Contact's public v3 API docs and should work
+as built. Their account-wide bounce reporting is less clearly documented
+publicly — it appears to live under per-campaign report endpoints rather than
+one simple incremental feed, so the bounce half of the sync (`fetchRecentBounces`
+in `src/services/constantContactApi.js`) is a best-effort implementation that
+may need a small fix once tested against a real connected account. It fails
+independently of the unsubscribe sync (wrapped in its own try/catch), so a
+bounce-endpoint issue won't block unsubscribes from syncing.
+
 ## Environment variables
 
 | Variable                  | Purpose                                                        |
@@ -81,6 +114,9 @@ now), so they show as "—" in the drawer for those rows.
 | `INITIAL_ADMIN_PASSWORD`   | Password for that first account (min 8 characters).             |
 | `SESSION_SECRET`           | Random string used to sign session cookies.                      |
 | `PORT`                     | Port to listen on (default `3000`).                              |
+| `CONSTANT_CONTACT_CLIENT_ID` | Only needed to connect Constant Contact — see below.           |
+| `CONSTANT_CONTACT_CLIENT_SECRET` | Only needed to connect Constant Contact — see below.       |
+| `APP_BASE_URL`             | Only needed to connect Constant Contact — your deployed HTTPS URL. |
 
 These three `INITIAL_ADMIN_*` variables are only consulted when the `users`
 table is empty — they don't need to stay set (or accurate) after the first

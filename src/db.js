@@ -130,6 +130,24 @@ db.exec(`
   );
 
   INSERT OR IGNORE INTO webhook_settings (id) VALUES (1);
+
+  -- One row per connected Constant Contact account — a workspace can connect
+  -- several (e.g. one per brand/team), each syncing into its own list.
+  CREATE TABLE IF NOT EXISTS cc_connections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    label TEXT NOT NULL,
+    account_email TEXT NOT NULL UNIQUE,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT NOT NULL,
+    token_expires_at TEXT NOT NULL,
+    connected_by_user_id INTEGER REFERENCES users (id),
+    connected_at TEXT NOT NULL DEFAULT (datetime('now')),
+    destination_list_id INTEGER REFERENCES lists (id),
+    last_synced_at TEXT,
+    last_sync_status TEXT,
+    last_sync_error TEXT,
+    last_sync_added_count INTEGER NOT NULL DEFAULT 0
+  );
 `);
 
 // Adds columns introduced after a database may have already been created,

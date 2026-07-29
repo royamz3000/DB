@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Copy } from '@phosphor-icons/react';
+import { Copy, PlugsConnected } from '@phosphor-icons/react';
 import PageHeader from '../../components/PageHeader';
 import Card, { PanelHead } from '../../components/Card';
 import Button from '../../components/Button';
@@ -9,7 +9,12 @@ import { SelectField } from '../../components/Field';
 import { fetchApiKeys, createApiKey } from '../../api/apiKeys';
 import { fetchWebhookSettings, updateWebhookSettings } from '../../api/settings';
 import { fetchUsers, createUser, deleteUser } from '../../api/users';
+import {
+  fetchConstantContactConnections, updateConnectionList, syncConnectionNow,
+  disconnectConnection, constantContactConnectUrl,
+} from '../../api/integrations';
 import { useRole } from '../../context/RoleContext';
+import { useLists } from '../../context/ListsContext';
 import { useToast } from '../../context/ToastContext';
 import './Settings.css';
 
@@ -32,9 +37,15 @@ const emptyNewUser = { name: '', email: '', password: '', role: 'sales' };
 export default function Settings() {
   const showToast = useToast();
   const { user: currentUser } = useRole();
+  const { lists } = useLists();
   const [keys, setKeys] = useState([]);
   const [revealed, setRevealed] = useState(new Set());
   const [webhooks, setWebhooks] = useState(null);
+
+  const [ccConnections, setCcConnections] = useState(null);
+  const [ccBusyId, setCcBusyId] = useState(null);
+
+  const loadCcConnections = () => fetchConstantContactConnections().then((d) => setCcConnections(d.connections));
 
   const [teamMembers, setTeamMembers] = useState([]);
   const [addingMember, setAddingMember] = useState(false);
@@ -47,7 +58,41 @@ export default function Settings() {
     fetchApiKeys().then((d) => setKeys(d.keys));
     fetchWebhookSettings().then(setWebhooks);
     loadTeam();
+    loadCcConnections();
   }, []);
+
+  const changeCcDestination = async (connectionId, listId) => {
+    setCcBusyId(connectionId);
+    try {
+      await updateConnectionList(connectionId, Number(listId));
+      await loadCcConnections();
+    } finally {
+      setCcBusyId(null);
+    }
+  };
+
+  const runCcSyncNow = async (connectionId) => {
+    setCcBusyId(connectionId);
+    try {
+      const result = await syncConnectionNow(connectionId);
+      showToast(`Synced — ${result.added} new suppression${result.added === 1 ? '' : 's'} added`);
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setCcBusyId(null);
+      loadCcConnections();
+    }
+  };
+
+  const disconnectCc = async (connectionId) => {
+    setCcBusyId(connectionId);
+    try {
+      await disconnectConnection(connectionId);
+      await loadCcConnections();
+    } finally {
+      setCcBusyId(null);
+    }
+  };
 
   const submitNewUser = async (e) => {
     e.preventDefault();
@@ -154,6 +199,69 @@ export default function Settings() {
           ))}
         </div>
       </Card>
+
+      {ccConnections && (
+        <Card className="settings-section">
+          <PanelHead
+            title="Constant Contact"
+            meta="Automatically pull unsubscribes (and, best-effort, bounces) into a suppression list — connect as many accounts as you need"
+            actions={
+              <Button variant="primary" icon={<PlugsConnected size={14} />} onClick={() => { window.location.href = constantContactConnectUrl; }}>
+                {ccConnections.length === 0 ? 'Connect Constant Contact' : 'Connect another account'}
+              </Button>
+            }
+          />
+
+          {ccConnections.length === 0 ? (
+            <p className="text-secondary muted">
+              Not connected. Connecting requires a Constant Contact developer app (Client ID/Secret set as
+              server environment variables) and a deployed HTTPS URL for the OAuth redirect.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {ccConnections.map((conn) => {
+                const busy = ccBusyId === conn.id;
+                return (
+                  <div key={conn.id} style={{ paddingBottom: 18, borderBottom: '1px solid var(--row-rule)' }}>
+                    <div className="text-table" style={{ marginBottom: 10 }}>{conn.label}</div>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
+                      <SelectField
+                        label="Sync new suppressions into"
+                        value={conn.destination_list_id || ''}
+                        onChange={(e) => changeCcDestination(conn.id, e.target.value)}
+                        disabled={busy}
+                      >
+                        <option value="" disabled>Choose a list…</option>
+                        {lists.map((l) => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </SelectField>
+                      <Button variant="primary" onClick={() => runCcSyncNow(conn.id)} disabled={busy || !conn.destination_list_id}>
+                        Sync now
+                      </Button>
+                      <Button variant="secondary" onClick={() => disconnectCc(conn.id)} disabled={busy}>
+                        Disconnect
+                      </Button>
+                    </div>
+                    <p className="text-caption muted" style={{ marginTop: 10 }}>
+                      Connected {new Date(conn.connected_at).toLocaleDateString()} ·{' '}
+                      {conn.last_synced_at
+                        ? `last synced ${new Date(conn.last_synced_at).toLocaleString()} (${conn.last_sync_added_count} added)`
+                        : 'not synced yet'}
+                      {conn.last_sync_status === 'error' && (
+                        <span style={{ color: 'oklch(0.66 0.125 25)' }}> · last sync failed: {conn.last_sync_error}</span>
+                      )}
+                    </p>
+                  </div>
+                );
+              })}
+              <p className="text-caption faint">
+                Every connected account also syncs automatically every 30 minutes in the background.
+              </p>
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card className="settings-section">
         <PanelHead title="API keys" actions={<Button variant="primary" onClick={addKey}>Create key</Button>} />
