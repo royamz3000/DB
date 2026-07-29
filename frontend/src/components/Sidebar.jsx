@@ -37,7 +37,7 @@ export default function Sidebar() {
     <aside className="sidebar">
       <div className="brand">
         <span className="brand-mark" />
-        <span className="brand-word">Sieve</span>
+        <span className="brand-word">Bizcap</span>
       </div>
 
       <label className="field">

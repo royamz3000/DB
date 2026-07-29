@@ -8,7 +8,7 @@ if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 const stagingDir = path.join(dataDir, 'staging');
 if (!fs.existsSync(stagingDir)) fs.mkdirSync(stagingDir, { recursive: true });
 
-const db = new Database(path.join(dataDir, 'sieve.db'));
+const db = new Database(path.join(dataDir, 'bizcap.db'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
@@ -123,7 +123,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS webhook_settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
-    webhook_url TEXT NOT NULL DEFAULT 'https://hooks.acme.io/sieve/imports',
+    webhook_url TEXT NOT NULL DEFAULT 'https://hooks.acme.io/bizcap/imports',
     auto_suppress_hard_bounces INTEGER NOT NULL DEFAULT 1,
     email_summary_on_import INTEGER NOT NULL DEFAULT 1,
     auto_remove_soft_bounces_90d INTEGER NOT NULL DEFAULT 0

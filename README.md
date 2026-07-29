@@ -1,4 +1,4 @@
-# Sieve — email suppression & validation portal
+# Bizcap — email suppression & validation portal
 
 An internal portal for an email-ops team to upload bounced/unsubscribed address
 lists into named suppression lists, and for anyone (ops or sales) to check
@@ -46,7 +46,7 @@ npm run dev   # runs the Express API (--watch) and the Vite dev server together
 The Vite dev server proxies `/api/*` to the Express server on port 3000, so
 visit whatever port Vite prints (usually 5173) during development.
 
-The SQLite database lives at `data/sieve.db` (git-ignored) and is seeded
+The SQLite database lives at `data/bizcap.db` (git-ignored) and is seeded
 automatically with a small, realistic demo dataset the first time the server
 starts against an empty database.
 
@@ -156,7 +156,7 @@ curl -L https://fly.io/install.sh | sh   # install flyctl
 fly auth login                            # creates/logs into a Fly.io account (free tier available)
 
 fly launch --no-deploy                    # picks up the existing Dockerfile + fly.toml; choose a unique app name
-fly volumes create sieve_data --size 1 --region iad   # match the region you picked
+fly volumes create bizcap_data --size 1 --region iad   # match the region you picked
 
 fly secrets set \
   INITIAL_ADMIN_EMAIL="you@yourcompany.com" \
@@ -172,7 +172,7 @@ Sign in with the `INITIAL_ADMIN_EMAIL`/`INITIAL_ADMIN_PASSWORD` you set above,
 then add teammates from Settings → Team — anyone you add can then sign in
 with their own email/password at that same URL.
 
-The volume (`sieve_data`, mounted at `/app/data` per `fly.toml`) is what makes
+The volume (`bizcap_data`, mounted at `/app/data` per `fly.toml`) is what makes
 the suppression database survive redeploys and restarts — without it, every
 deploy would reset to the seeded demo data. Any other host that gives you a
 persistent disk plus a long-running Node process works the same way; Fly.io

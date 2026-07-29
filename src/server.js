@@ -64,5 +64,5 @@ if (fs.existsSync(distDir)) {
 }
 
 app.listen(PORT, () => {
-  console.log(`Sieve portal listening on http://localhost:${PORT}`);
+  console.log(`Bizcap portal listening on http://localhost:${PORT}`);
 });

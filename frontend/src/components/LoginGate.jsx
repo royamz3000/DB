@@ -31,7 +31,7 @@ export default function LoginGate({ onAuthenticated }) {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="brand-mark" />
-          <span className="text-panel">Sieve</span>
+          <span className="text-panel">Bizcap</span>
         </div>
         <p className="text-secondary muted">Sign in with your account to continue.</p>
         <input

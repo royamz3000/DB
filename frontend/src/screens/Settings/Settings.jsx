@@ -183,7 +183,7 @@ export default function Settings() {
       <Card className="settings-section">
         <h2 className="text-section">Check an address from your app</h2>
         <div className="code-block" style={{ marginTop: 12 }}>
-{`curl https://api.sieve.email/v1/check \\
+{`curl https://api.bizcap.email/v1/check \\
   -H "Authorization: Bearer ${exampleKey ? maskKey(exampleKey.key_value) : 'sk_live_••••••'}" \\
   -d email="maria.chen@northgate.io"
 

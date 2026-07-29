@@ -1,7 +1,7 @@
 {
-  "name": "sieve-portal",
+  "name": "bizcap-portal",
   "version": "1.0.0",
-  "description": "Sieve — email suppression & validation portal. Upload bounced/unsubscribed lists, check addresses before you send, browse and manage suppression lists.",
+  "description": "Bizcap — email suppression & validation portal. Upload bounced/unsubscribed lists, check addresses before you send, browse and manage suppression lists.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -9,7 +9,7 @@
     "dev:client": "npm run dev --prefix frontend",
     "dev": "concurrently -n server,client -c blue,magenta \"npm run dev:server\" \"npm run dev:client\"",
     "build": "npm install --prefix frontend && npm run build --prefix frontend",
-    "seed:reset": "node -e \"require('fs').rmSync('data/sieve.db',{force:true}); require('fs').rmSync('data/sieve.db-wal',{force:true}); require('fs').rmSync('data/sieve.db-shm',{force:true}); require('./src/services/seed').seedIfEmpty();\""
+    "seed:reset": "node -e \"require('fs').rmSync('data/bizcap.db',{force:true}); require('fs').rmSync('data/bizcap.db-wal',{force:true}); require('fs').rmSync('data/bizcap.db-shm',{force:true}); require('./src/services/seed').seedIfEmpty();\""
   },
   "license": "UNLICENSED",
   "private": true,
