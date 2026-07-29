@@ -44,6 +44,7 @@ export default function Settings() {
 
   const [ccConnections, setCcConnections] = useState(null);
   const [ccBusyId, setCcBusyId] = useState(null);
+  const [showCcConnectForm, setShowCcConnectForm] = useState(false);
 
   const loadCcConnections = () => fetchConstantContactConnections().then((d) => setCcConnections(d.connections));
 
@@ -206,16 +207,45 @@ export default function Settings() {
             title="Constant Contact"
             meta="Automatically pull unsubscribes (and, best-effort, bounces) into a suppression list — connect as many accounts as you need"
             actions={
-              <Button variant="primary" icon={<PlugsConnected size={14} />} onClick={() => { window.location.href = constantContactConnectUrl; }}>
+              <Button variant="primary" icon={<PlugsConnected size={14} />} onClick={() => setShowCcConnectForm((v) => !v)}>
                 {ccConnections.length === 0 ? 'Connect Constant Contact' : 'Connect another account'}
               </Button>
             }
           />
 
-          {ccConnections.length === 0 ? (
+          {showCcConnectForm && (
+            <form
+              method="POST"
+              action={constantContactConnectUrl}
+              style={{ display: 'flex', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid var(--row-rule)' }}
+            >
+              <label className="field">
+                <span className="field-label">Label</span>
+                <input className="input" name="label" placeholder="e.g. Acme Corp" required />
+              </label>
+              <label className="field">
+                <span className="field-label">Client ID</span>
+                <input className="input" name="clientId" required />
+              </label>
+              <label className="field">
+                <span className="field-label">Client secret</span>
+                <input className="input" name="clientSecret" type="password" required />
+              </label>
+              <Button type="submit">Continue to Constant Contact</Button>
+              <p className="text-caption faint" style={{ width: '100%', margin: 0 }}>
+                From a developer app registered inside <em>this specific</em> Constant Contact account (each
+                account needs its own app — see Settings help text below for why).
+              </p>
+            </form>
+          )}
+
+          {ccConnections.length === 0 && !showCcConnectForm ? (
             <p className="text-secondary muted">
-              Not connected. Connecting requires a Constant Contact developer app (Client ID/Secret set as
-              server environment variables) and a deployed HTTPS URL for the OAuth redirect.
+              Not connected. Each Constant Contact account you want to sync needs its own developer app
+              (Client ID/Secret) registered inside that account's own developer portal — Constant Contact
+              scopes new apps to a single account unless approved for public access, which isn't guaranteed,
+              so a separate app per account is the reliable path. Also requires <code>APP_BASE_URL</code> (a
+              deployed HTTPS URL) set on the server for the OAuth redirect.
             </p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

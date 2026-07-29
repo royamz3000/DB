@@ -20,18 +20,20 @@ function getConnectionRaw(id) {
  * for this Constant Contact account (matched by account_email), so
  * reconnecting the same account updates it in place instead of duplicating.
  */
-function upsertConnectionFromOAuth({ accountEmail, label, accessToken, refreshToken, expiresInSeconds, userId }) {
+function upsertConnectionFromOAuth({ accountEmail, label, clientId, clientSecret, accessToken, refreshToken, expiresInSeconds, userId }) {
   const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
   db.prepare(`
-    INSERT INTO cc_connections (label, account_email, access_token, refresh_token, token_expires_at, connected_by_user_id)
-    VALUES (@label, @accountEmail, @accessToken, @refreshToken, @expiresAt, @userId)
+    INSERT INTO cc_connections (label, account_email, client_id, client_secret, access_token, refresh_token, token_expires_at, connected_by_user_id)
+    VALUES (@label, @accountEmail, @clientId, @clientSecret, @accessToken, @refreshToken, @expiresAt, @userId)
     ON CONFLICT (account_email) DO UPDATE SET
       label = excluded.label,
+      client_id = excluded.client_id,
+      client_secret = excluded.client_secret,
       access_token = excluded.access_token,
       refresh_token = excluded.refresh_token,
       token_expires_at = excluded.token_expires_at,
       connected_by_user_id = excluded.connected_by_user_id
-  `).run({ label, accountEmail, accessToken, refreshToken, expiresAt, userId });
+  `).run({ label, accountEmail, clientId, clientSecret, accessToken, refreshToken, expiresAt, userId });
 
   return db.prepare('SELECT id FROM cc_connections WHERE account_email = ?').get(accountEmail);
 }
@@ -59,7 +61,7 @@ async function getValidAccessToken(connectionId) {
   const expiresAt = new Date(conn.token_expires_at).getTime();
   if (Date.now() < expiresAt - 60_000) return conn.access_token;
 
-  const fresh = await ccApi.refreshTokens(conn.refresh_token);
+  const fresh = await ccApi.refreshTokens(conn.refresh_token, conn.client_id, conn.client_secret);
   db.prepare(`
     UPDATE cc_connections SET access_token = ?, refresh_token = ?, token_expires_at = ? WHERE id = ?
   `).run(

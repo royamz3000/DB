@@ -83,17 +83,30 @@ block the others. Reconnecting the same Constant Contact account updates its
 existing connection in place rather than creating a duplicate (matched by the
 account's contact email via `GET /v3/account/summary`).
 
-**Setup** (one-time, needs your own Constant Contact developer account):
-1. Register an app at [developer.constantcontact.com](https://developer.constantcontact.com)
-   to get a Client ID and Client Secret.
-2. Set its redirect URI to `<your deployed URL>/api/integrations/constant-contact/callback`
-   — this must be a real public HTTPS URL; Constant Contact's OAuth flow
-   won't redirect to `localhost`, which is one reason getting this deployed
-   (see below) comes before connecting Constant Contact.
-3. Set `CONSTANT_CONTACT_CLIENT_ID`, `CONSTANT_CONTACT_CLIENT_SECRET`, and
-   `APP_BASE_URL` (your deployed URL) as environment variables.
-4. From Settings → Constant Contact, click Connect, choose which suppression
-   list new entries land in, and sync.
+**Each connected account needs its own developer app** — not one shared app
+for all of them. When Constant Contact creates a new app, it's scoped to
+only the account that created it; making it work across other accounts
+requires Constant Contact support to approve it for "public access," which
+isn't guaranteed (call 866-289-2101 to request it — but don't count on a
+yes). The reliable path, and what this app is built for, is registering a
+separate small app inside *each* Constant Contact account you want to
+connect — each is then naturally scoped to just that one account, no
+approval needed.
+
+**Setup** (once per Constant Contact account you want to connect):
+1. Set `APP_BASE_URL` (your deployed URL) as a server environment variable —
+   this is shared across all connections and only needs setting once.
+2. Log into that specific Constant Contact account's developer portal at
+   [developer.constantcontact.com](https://developer.constantcontact.com)
+   and register a new app (Authorization Code Flow, Rotating Refresh
+   Tokens). Set its redirect URI to
+   `<APP_BASE_URL>/api/integrations/constant-contact/callback`.
+3. Copy that app's Client ID and Client Secret.
+4. From Settings → Constant Contact, click "Connect another account," enter
+   a label (e.g. the business/brand name) plus that Client ID/Secret, and
+   continue through Constant Contact's login for that account.
+5. Choose which suppression list this account's new entries land in, then
+   sync. Repeat steps 2–5 for each additional account.
 
 **An honest caveat**: the unsubscribe sync (`GET /v3/contacts?status=unsubscribed`)
 is solidly documented in Constant Contact's public v3 API docs and should work
@@ -114,9 +127,7 @@ bounce-endpoint issue won't block unsubscribes from syncing.
 | `INITIAL_ADMIN_PASSWORD`   | Password for that first account (min 8 characters).             |
 | `SESSION_SECRET`           | Random string used to sign session cookies.                      |
 | `PORT`                     | Port to listen on (default `3000`).                              |
-| `CONSTANT_CONTACT_CLIENT_ID` | Only needed to connect Constant Contact — see below.           |
-| `CONSTANT_CONTACT_CLIENT_SECRET` | Only needed to connect Constant Contact — see below.       |
-| `APP_BASE_URL`             | Only needed to connect Constant Contact — your deployed HTTPS URL. |
+| `APP_BASE_URL`             | Only needed to connect Constant Contact — your deployed HTTPS URL. Each account's own Client ID/Secret is entered in Settings, not here — see below. |
 
 These three `INITIAL_ADMIN_*` variables are only consulted when the `users`
 table is empty — they don't need to stay set (or accurate) after the first

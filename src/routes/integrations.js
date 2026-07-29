@@ -8,30 +8,38 @@ router.get('/constant-contact', (req, res) => {
   res.json({ connections: cc.listConnections() });
 });
 
-router.get('/constant-contact/connect', (req, res) => {
-  try {
-    const state = cc.generateState();
-    req.session.ccOauthState = state;
-    res.redirect(ccApi.buildAuthorizeUrl(state));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+// A real <form method="POST"> submit, not a fetch — the response is a
+// redirect the browser must follow to Constant Contact's own login page,
+// which a JS fetch() call can't do (it would just consume the redirect).
+router.post('/constant-contact/connect', (req, res) => {
+  const { label, clientId, clientSecret } = req.body || {};
+  if (!label || !clientId || !clientSecret) {
+    return res.status(400).send('Label, Client ID, and Client Secret are all required to connect an account.');
   }
+
+  const state = cc.generateState();
+  req.session.pendingCcConnect = { state, label, clientId, clientSecret };
+  res.redirect(ccApi.buildAuthorizeUrl(state, clientId));
 });
 
 router.get('/constant-contact/callback', async (req, res) => {
   const { code, state } = req.query;
-  if (!state || state !== req.session.ccOauthState) {
+  const pending = req.session.pendingCcConnect;
+
+  if (!pending || !state || state !== pending.state) {
     return res.status(400).send('Invalid or expired OAuth state. Please try connecting again from Settings.');
   }
-  delete req.session.ccOauthState;
+  delete req.session.pendingCcConnect;
 
   try {
-    const tokens = await ccApi.exchangeCodeForTokens(code);
+    const tokens = await ccApi.exchangeCodeForTokens(code, pending.clientId, pending.clientSecret);
     const summary = await ccApi.fetchAccountSummary(tokens.access_token);
 
     cc.upsertConnectionFromOAuth({
       accountEmail: summary.contact_email,
-      label: summary.organization_name || summary.contact_email,
+      label: pending.label,
+      clientId: pending.clientId,
+      clientSecret: pending.clientSecret,
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
       expiresInSeconds: tokens.expires_in,

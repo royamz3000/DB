@@ -1,25 +1,23 @@
 const AUTHZ_BASE = 'https://authz.constantcontact.com/oauth2/default/v1';
 const API_BASE = 'https://api.cc.email/v3';
 
-function requireEnv() {
-  const clientId = process.env.CONSTANT_CONTACT_CLIENT_ID;
-  const clientSecret = process.env.CONSTANT_CONTACT_CLIENT_SECRET;
+// Each connected Constant Contact account brings its own Client ID/Secret
+// (registered inside that account's own developer portal) rather than one
+// shared app — Constant Contact scopes a new app to the account that
+// created it unless approved for "public access", and that approval isn't
+// always granted, so per-account apps are the reliable path for connecting
+// several independent accounts.
+function requireAppBaseUrl() {
   const appBaseUrl = process.env.APP_BASE_URL;
-  if (!clientId || !clientSecret || !appBaseUrl) {
-    throw new Error(
-      'CONSTANT_CONTACT_CLIENT_ID, CONSTANT_CONTACT_CLIENT_SECRET, and APP_BASE_URL must all be set to connect Constant Contact.',
-    );
-  }
-  return { clientId, clientSecret, appBaseUrl };
+  if (!appBaseUrl) throw new Error('APP_BASE_URL must be set (your deployed HTTPS URL) to connect Constant Contact.');
+  return appBaseUrl;
 }
 
 function redirectUri() {
-  const { appBaseUrl } = requireEnv();
-  return `${appBaseUrl.replace(/\/$/, '')}/api/integrations/constant-contact/callback`;
+  return `${requireAppBaseUrl().replace(/\/$/, '')}/api/integrations/constant-contact/callback`;
 }
 
-function buildAuthorizeUrl(state) {
-  const { clientId } = requireEnv();
+function buildAuthorizeUrl(state, clientId) {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri(),
@@ -30,8 +28,7 @@ function buildAuthorizeUrl(state) {
   return `${AUTHZ_BASE}/authorize?${params.toString()}`;
 }
 
-async function exchangeCodeForTokens(code) {
-  const { clientId, clientSecret } = requireEnv();
+async function exchangeCodeForTokens(code, clientId, clientSecret) {
   const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
   const res = await fetch(`${AUTHZ_BASE}/token`, {
@@ -51,8 +48,7 @@ async function exchangeCodeForTokens(code) {
   return res.json();
 }
 
-async function refreshTokens(refreshToken) {
-  const { clientId, clientSecret } = requireEnv();
+async function refreshTokens(refreshToken, clientId, clientSecret) {
   const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
   const res = await fetch(`${AUTHZ_BASE}/token`, {

@@ -137,6 +137,8 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     label TEXT NOT NULL,
     account_email TEXT NOT NULL UNIQUE,
+    client_id TEXT NOT NULL,
+    client_secret TEXT NOT NULL,
     access_token TEXT NOT NULL,
     refresh_token TEXT NOT NULL,
     token_expires_at TEXT NOT NULL,
