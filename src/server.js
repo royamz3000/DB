@@ -15,6 +15,7 @@ const settingsRouter = require('./routes/settings');
 const statsRouter = require('./routes/stats');
 const usersRouter = require('./routes/users');
 const integrationsRouter = require('./routes/integrations');
+const databaseRouter = require('./routes/database');
 const { seedIfEmpty } = require('./services/seed');
 const { bootstrapInitialAdminIfEmpty } = require('./services/users');
 const constantContact = require('./services/constantContact');
@@ -58,6 +59,7 @@ app.use('/api/settings', requireAuth, requireOps, settingsRouter);
 app.use('/api/stats', requireAuth, requireOps, statsRouter);
 app.use('/api/users', requireAuth, requireOps, usersRouter);
 app.use('/api/integrations', requireAuth, requireOps, integrationsRouter);
+app.use('/api/database', requireAuth, requireOps, databaseRouter);
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found.' }));
 
 const distDir = path.join(__dirname, '..', 'frontend', 'dist');

@@ -14,6 +14,7 @@ import SuppressionList from './screens/Suppressions/SuppressionList';
 import Lists from './screens/Lists/Lists';
 import Settings from './screens/Settings/Settings';
 import MyRecentChecks from './screens/Checks/MyRecentChecks';
+import Database from './screens/Database/Database';
 
 function Shell() {
   const { isOps } = useRole();
@@ -30,6 +31,7 @@ function Shell() {
             <Route path="/suppressions" element={<SuppressionList />} />
             <Route path="/lists" element={isOps ? <Lists /> : <Navigate to="/check" replace />} />
             <Route path="/settings" element={isOps ? <Settings /> : <Navigate to="/check" replace />} />
+            <Route path="/database" element={isOps ? <Database /> : <Navigate to="/check" replace />} />
             <Route path="/checks" element={<MyRecentChecks />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

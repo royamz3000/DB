@@ -159,11 +159,11 @@ didn't hold up as real product logic:
 
 ## Role model
 
-`ops` sees Overview, Upload, Check, Suppression list, Lists, and API &
-Settings, with full bulk actions (un-suppress, export, create lists/keys,
-manage teammates). `sales` sees only Check a list, My recent checks, and
-read-only Search — no upload, no row selection, no export-suppressed, no
-un-suppress.
+`ops` sees Overview, Upload, Check, Suppression list, Lists, API & Settings,
+and the Database browser, with full bulk actions (un-suppress, export, create
+lists/keys, manage teammates). `sales` sees only Check a list, My recent
+checks, and read-only Search — no upload, no row selection, no
+export-suppressed, no un-suppress, no database access.
 
 Each account's role is set once, when an ops teammate creates that account
 (Settings → Team), not something the account holder can change themselves.
@@ -178,7 +178,7 @@ directly) — so this is a real access boundary, not just a UI convenience.
 src/
   server.js                Express app entry point (serves API + built SPA)
   db.js                     SQLite connection + schema
-  routes/                   auth, lists, suppressions, checks, jobs, apiKeys, settings, stats
+  routes/                   auth, users, lists, suppressions, checks, jobs, apiKeys, settings, stats, integrations, database
   services/                 matching business logic modules + seed.js
 frontend/
   src/
@@ -186,9 +186,20 @@ frontend/
     context/                 RoleContext, ListsContext, ToastContext
     components/              design-system primitives (Button, Card, Drawer, DataTable, ...)
     styles/                  tokens.css (design tokens), global.css, components.css
-    screens/                 CheckEmails, Suppressions, Upload, Overview, Lists, Settings, Checks
+    screens/                 CheckEmails, Suppressions, Upload, Overview, Lists, Settings, Checks, Database
     api/                     thin fetch wrappers per backend route group
 ```
+
+## Database browser (ops only)
+
+The Database screen is a built-in admin panel for viewing and querying the
+live SQLite database from the browser — table list with row counts, paginated
+table contents, and a raw-SQL runner (SELECT returns rows; INSERT/UPDATE/DELETE
+execute for real, no undo). It's gated to `ops` accounts by the same
+server-side `requireOps` middleware as the other admin endpoints, so sales
+accounts can't reach it or its API even directly. Because it runs arbitrary
+SQL with full read/write access, treat access to an ops account as equivalent
+to direct database access.
 
 ## Deploying somewhere persistent (for other people to use)
 

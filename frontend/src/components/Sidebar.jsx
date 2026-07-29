@@ -7,6 +7,7 @@ import {
   Stack,
   GearSix,
   ClockCounterClockwise,
+  Database as DatabaseIcon,
   CaretDown,
 } from '@phosphor-icons/react';
 import { useRole } from '../context/RoleContext';
@@ -20,6 +21,7 @@ const OPS_NAV = [
   { to: '/suppressions', label: 'Suppression list', icon: ListChecks },
   { to: '/lists', label: 'Lists', icon: Stack },
   { to: '/settings', label: 'API & settings', icon: GearSix },
+  { to: '/database', label: 'Database', icon: DatabaseIcon },
 ];
 
 const SALES_NAV = [
