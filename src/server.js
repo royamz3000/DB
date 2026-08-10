@@ -16,11 +16,17 @@ const statsRouter = require('./routes/stats');
 const usersRouter = require('./routes/users');
 const integrationsRouter = require('./routes/integrations');
 const databaseRouter = require('./routes/database');
-const { seedIfEmpty } = require('./services/seed');
+const { seedIfEmpty, ensureSystemLists } = require('./services/seed');
 const { bootstrapInitialAdminIfEmpty } = require('./services/users');
 const constantContact = require('./services/constantContact');
 
-seedIfEmpty();
+// Demo/sample data only loads when explicitly asked for (local dev). A real
+// deployment gets just the two empty starter lists — no fake entries.
+if (process.env.SEED_DEMO_DATA === 'true') {
+  seedIfEmpty();
+} else {
+  ensureSystemLists();
+}
 bootstrapInitialAdminIfEmpty();
 
 const app = express();

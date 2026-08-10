@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../db');
+const { ensureSystemLists } = require('../services/seed');
 
 const router = express.Router();
 
@@ -48,6 +49,27 @@ router.post('/query', (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+// Wipes all operational/demo data — suppression entries, their events,
+// import jobs, check history, API keys, and lists — then recreates the two
+// empty starter system lists. Deliberately KEEPS user accounts, webhook
+// settings, and Constant Contact connections so you stay logged in and
+// connected. Deletes in FK-safe order inside one transaction.
+router.post('/reset', (req, res) => {
+  const wipe = db.transaction(() => {
+    db.prepare('DELETE FROM check_batch_results').run();
+    db.prepare('DELETE FROM check_batches').run();
+    db.prepare('DELETE FROM entry_events').run();
+    db.prepare('DELETE FROM suppression_entries').run();
+    db.prepare('DELETE FROM import_jobs').run();
+    db.prepare('DELETE FROM api_keys').run();
+    db.prepare('UPDATE cc_connections SET destination_list_id = NULL').run();
+    db.prepare('DELETE FROM lists').run();
+  });
+  wipe();
+  ensureSystemLists();
+  res.json({ ok: true });
 });
 
 module.exports = router;

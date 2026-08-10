@@ -208,4 +208,15 @@ function seedIfEmpty() {
   run();
 }
 
-module.exports = { seedIfEmpty };
+// Production starter lists: two empty system lists so uploads and the
+// Constant Contact sync always have a destination to point at. Idempotent —
+// safe to call on every boot and after a data reset. Contains no demo data.
+function ensureSystemLists() {
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO lists (name, kind, description, can_be_emptied) VALUES (?, 'system', ?, ?)
+  `);
+  insert.run('Global bounces', 'Hard bounces and spam complaints. Written to automatically by imports and syncs.', 1);
+  insert.run('Unsubscribes', 'Opt-outs and one-click unsubscribes. Legally required — cannot be emptied.', 0);
+}
+
+module.exports = { seedIfEmpty, ensureSystemLists };

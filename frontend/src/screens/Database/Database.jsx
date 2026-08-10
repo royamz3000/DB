@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import PageHeader from '../../components/PageHeader';
 import Card, { PanelHead } from '../../components/Card';
 import Button from '../../components/Button';
-import { fetchTables, fetchTableRows, runSqlQuery } from '../../api/database';
+import { fetchTables, fetchTableRows, runSqlQuery, resetDatabase } from '../../api/database';
+import { useToast } from '../../context/ToastContext';
 import { cx } from '../../lib/cx';
 import './Database.css';
 
@@ -34,6 +35,7 @@ function ResultTable({ columns, rows }) {
 }
 
 export default function Database() {
+  const showToast = useToast();
   const [tables, setTables] = useState([]);
   const [activeTable, setActiveTable] = useState(null);
   const [tableData, setTableData] = useState(null);
@@ -43,10 +45,36 @@ export default function Database() {
   const [queryResult, setQueryResult] = useState(null);
   const [queryError, setQueryError] = useState('');
   const [running, setRunning] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const loadTables = () => fetchTables().then((d) => setTables(d.tables));
 
   useEffect(() => {
-    fetchTables().then((d) => setTables(d.tables));
+    loadTables();
   }, []);
+
+  const handleReset = async () => {
+    const ok = window.confirm(
+      'This permanently deletes ALL suppression entries, lists, import history, ' +
+      'check history, and API keys, and cannot be undone.\n\n' +
+      'Your login, teammates, settings, and Constant Contact connections are kept.\n\n' +
+      'Continue?',
+    );
+    if (!ok) return;
+    setResetting(true);
+    try {
+      await resetDatabase();
+      setActiveTable(null);
+      setTableData(null);
+      setQueryResult(null);
+      await loadTables();
+      showToast('Database cleared — clean slate ready');
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setResetting(false);
+    }
+  };
 
   useEffect(() => {
     if (!activeTable) return;
@@ -68,7 +96,7 @@ export default function Database() {
       const result = await runSqlQuery(sql);
       setQueryResult(result);
       setActiveTable(null);
-      fetchTables().then((d) => setTables(d.tables)); // row counts may have changed
+      loadTables(); // row counts may have changed
     } catch (err) {
       setQueryError(err.message);
       setQueryResult(null);
@@ -142,6 +170,18 @@ export default function Database() {
               </div>
             </Card>
           )}
+
+          <Card style={{ boxShadow: '0 0 0 1px oklch(0.66 0.125 25 / 0.4)' }}>
+            <h2 className="text-section" style={{ color: 'oklch(0.66 0.125 25)' }}>Danger zone</h2>
+            <p className="text-caption muted" style={{ margin: '6px 0 14px', maxWidth: '60ch' }}>
+              Clear all sample/demo data to start fresh with real data. This permanently deletes every
+              suppression entry, list, import, check, and API key, then leaves two empty starter lists.
+              Your login, teammates, settings, and Constant Contact connections are kept. No undo.
+            </p>
+            <Button variant="secondary" onClick={handleReset} disabled={resetting}>
+              {resetting ? 'Clearing…' : 'Clear all data (start fresh)'}
+            </Button>
+          </Card>
         </div>
       </div>
     </>
