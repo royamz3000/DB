@@ -1,19 +1,40 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from '@phosphor-icons/react';
+import { Plus, Trash } from '@phosphor-icons/react';
 import PageHeader from '../../components/PageHeader';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import { useLists } from '../../context/ListsContext';
-import { createList } from '../../api/lists';
+import { useToast } from '../../context/ToastContext';
+import { createList, deleteList } from '../../api/lists';
 import './Lists.css';
 
 export default function Lists() {
   const { lists, setSelectedListId, refreshLists } = useLists();
   const navigate = useNavigate();
+  const showToast = useToast();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [deletingId, setDeletingId] = useState(null);
+
+  const handleDelete = async (list) => {
+    const ok = window.confirm(
+      `Delete the list "${list.name}" and all ${list.entry_count.toLocaleString()} addresses in it?\n\n` +
+      'This permanently removes the list and its entries. This cannot be undone.',
+    );
+    if (!ok) return;
+    setDeletingId(list.id);
+    try {
+      const { entriesDeleted } = await deleteList(list.id);
+      showToast(`Deleted "${list.name}" (${entriesDeleted.toLocaleString()} addresses removed)`);
+      refreshLists();
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const browse = (list) => {
     setSelectedListId(String(list.id));
@@ -50,6 +71,15 @@ export default function Lists() {
                 <div className="text-label">{list.kind}</div>
                 <div className="text-panel">{list.name}</div>
               </div>
+              <button
+                type="button"
+                className="list-card-delete"
+                title="Delete this list and its addresses"
+                onClick={() => handleDelete(list)}
+                disabled={deletingId === list.id}
+              >
+                <Trash size={16} />
+              </button>
             </div>
             <div className="list-card-stats">
               <div>

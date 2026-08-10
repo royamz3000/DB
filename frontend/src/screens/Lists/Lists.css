@@ -9,6 +9,27 @@
   align-items: flex-start;
   justify-content: space-between;
 }
+.list-card-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.list-card-delete:hover:not(:disabled) {
+  background: rgba(229, 83, 75, 0.12);
+  color: oklch(0.66 0.125 25);
+}
+.list-card-delete:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
 .list-card-stats {
   display: flex;

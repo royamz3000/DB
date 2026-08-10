@@ -22,4 +22,27 @@ function create({ name, description }) {
   return getById(result.lastInsertRowid);
 }
 
-module.exports = { listAll, getById, create };
+/**
+ * Deletes a list and everything tied to it, in FK-safe order and one
+ * transaction: its suppression entries (whose events cascade), any import
+ * jobs that targeted it, and it clears the destination on any Constant
+ * Contact connection pointing at it. Returns how many addresses were removed.
+ */
+function deleteList(id) {
+  const list = getById(id);
+  if (!list) return { ok: false, error: 'not_found' };
+
+  const entryCount = db.prepare('SELECT COUNT(*) AS c FROM suppression_entries WHERE list_id = ?').get(id).c;
+
+  const run = db.transaction(() => {
+    db.prepare('DELETE FROM suppression_entries WHERE list_id = ?').run(id);
+    db.prepare('DELETE FROM import_jobs WHERE list_id = ?').run(id);
+    db.prepare('UPDATE cc_connections SET destination_list_id = NULL WHERE destination_list_id = ?').run(id);
+    db.prepare('DELETE FROM lists WHERE id = ?').run(id);
+  });
+  run();
+
+  return { ok: true, entriesDeleted: entryCount };
+}
+
+module.exports = { listAll, getById, create, deleteList };

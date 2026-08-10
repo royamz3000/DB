@@ -19,4 +19,10 @@ router.post('/', requireOps, (req, res) => {
   }
 });
 
+router.delete('/:id', requireOps, (req, res) => {
+  const result = lists.deleteList(req.params.id);
+  if (!result.ok) return res.status(404).json({ error: 'Not found.' });
+  res.json(result);
+});
+
 module.exports = router;
