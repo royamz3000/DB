@@ -28,15 +28,18 @@ const DATE_HEADER_HINTS = [
 const ADDED_BY_HEADER_HINTS = ['added_by', 'added by', 'user'];
 const COMPANY_HEADER_HINTS = [
   'company', 'company_name', 'company name', 'account', 'account_name',
-  'account name', 'organization', 'organization name',
+  'account name', 'organization', 'organization name', 'business', 'business name',
 ];
 const LEAD_ID_HEADER_HINTS = [
   'lead_id', 'lead id', 'contact_id', 'contact id', 'salesforce_id',
-  'sfid', 'crm_id', 'crm id', 'record_id', 'record id',
+  'sfid', 'crm_id', 'crm id', 'record_id', 'record id', 'id',
 ];
-const PHONE_HEADER_HINTS = ['phone', 'phone_number', 'phone number', 'mobile', 'contact_phone', 'contact phone', 'work phone'];
-const CRM_OWNER_HEADER_HINTS = ['owner', 'sales_rep', 'sales rep', 'account_owner', 'account owner', 'rep'];
-const CRM_URL_HEADER_HINTS = ['record_url', 'record url', 'salesforce_url', 'crm_url', 'crm url', 'link', 'url'];
+const PHONE_HEADER_HINTS = ['phone', 'phone_number', 'phone number', 'mobile', 'contact_phone', 'contact phone', 'work phone', 'cell'];
+const CRM_OWNER_HEADER_HINTS = ['owner', 'sales_rep', 'sales rep', 'account_owner', 'account owner', 'rep', 'assigned to', 'assigned_to'];
+const CRM_URL_HEADER_HINTS = ['record_url', 'record url', 'salesforce_url', 'crm_url', 'crm url', 'link', 'url', 'profile url'];
+const FIRST_NAME_HEADER_HINTS = ['first_name', 'first name', 'firstname', 'fname', 'first', 'given name', 'given_name'];
+const LAST_NAME_HEADER_HINTS = ['last_name', 'last name', 'lastname', 'lname', 'last', 'surname', 'family name', 'family_name'];
+const SOURCE_HEADER_HINTS = ['source', 'origin', 'provider', 'list source', 'data source', 'data_source', 'lead source', 'lead_source'];
 
 const FILE_KIND_DEFAULT_REASON = {
   bounced: 'hard_bounce',
@@ -103,27 +106,57 @@ async function previewStagedFile(stagingId) {
     samples: sampleRows.map((row) => row[index] || ''),
   }));
 
+  const usedIndexes = new Set();
+  const normalizedHeaders = (header || []).map((h) => normalizeHeader(h));
+
+  // Smarter matching: normalize headers (lowercase, strip spaces/punctuation)
+  // and score each against a field's hints — exact normalized match beats a
+  // substring match. Each column is only claimed by one field, best-fit first,
+  // so "email" and "email domain" don't both grab the email slot.
   const guess = (hints) => {
-    const idx = (header || []).findIndex((h) => hints.includes(h.trim().toLowerCase()));
-    return idx === -1 ? null : idx;
+    const normHints = hints.map(normalizeHeader);
+    let best = { idx: -1, score: 0 };
+    normalizedHeaders.forEach((h, idx) => {
+      if (usedIndexes.has(idx) || !h) return;
+      let score = 0;
+      if (normHints.includes(h)) score = 3;
+      else if (normHints.some((hint) => h === hint || h.startsWith(hint) || hint.startsWith(h))) score = 2;
+      else if (normHints.some((hint) => hint.length >= 4 && (h.includes(hint) || hint.includes(h)))) score = 1;
+      if (score > best.score) best = { idx, score };
+    });
+    if (best.idx === -1) return null;
+    usedIndexes.add(best.idx);
+    return best.idx;
   };
+
+  // Claim the most specific fields first so generic hints (e.g. "id", "url")
+  // don't steal a column a more specific field wants.
+  const emailCol = guess(EMAIL_HEADER_HINTS);
+  const firstNameCol = guess(FIRST_NAME_HEADER_HINTS);
+  const lastNameCol = guess(LAST_NAME_HEADER_HINTS);
+  const reasonCol = guess(REASON_HEADER_HINTS);
+  const companyCol = guess(COMPANY_HEADER_HINTS);
+  const phoneCol = guess(PHONE_HEADER_HINTS);
+  const sourceCol = guess(SOURCE_HEADER_HINTS);
+  const crmOwnerCol = guess(CRM_OWNER_HEADER_HINTS);
+  const leadIdCol = guess(LEAD_ID_HEADER_HINTS);
+  const crmUrlCol = guess(CRM_URL_HEADER_HINTS);
+  const dateCol = guess(DATE_HEADER_HINTS);
+  const addedByCol = guess(ADDED_BY_HEADER_HINTS);
 
   return {
     sizeBytes: stats.size,
     rowCount,
     columns,
     guessedMapping: {
-      emailCol: guess(EMAIL_HEADER_HINTS),
-      reasonCol: guess(REASON_HEADER_HINTS),
-      dateCol: guess(DATE_HEADER_HINTS),
-      addedByCol: guess(ADDED_BY_HEADER_HINTS),
-      companyCol: guess(COMPANY_HEADER_HINTS),
-      leadIdCol: guess(LEAD_ID_HEADER_HINTS),
-      phoneCol: guess(PHONE_HEADER_HINTS),
-      crmOwnerCol: guess(CRM_OWNER_HEADER_HINTS),
-      crmUrlCol: guess(CRM_URL_HEADER_HINTS),
+      emailCol, reasonCol, dateCol, addedByCol, companyCol, leadIdCol,
+      phoneCol, crmOwnerCol, crmUrlCol, firstNameCol, lastNameCol, sourceCol,
     },
   };
+}
+
+function normalizeHeader(h) {
+  return String(h || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function createJobRecord({ filename, listId, fileKind, defaultReason, validateSyntax, totalRows }) {
@@ -174,6 +207,7 @@ function skippedReportPath(relPath) {
 async function startImportJob(jobId, {
   emailCol, reasonCol, listId, defaultReason, validateSyntax, filename,
   companyCol, leadIdCol, phoneCol, crmOwnerCol, crmUrlCol,
+  firstNameCol, lastNameCol, sourceCol,
 }) {
   const startedAt = Date.now();
   const stagedPath = path.join(stagingDir, `job-${jobId}${path.extname(filename) || '.csv'}`);
@@ -229,10 +263,14 @@ async function startImportJob(jobId, {
           if (!validity.hasMailServer) riskScoreOverride = 99;
         }
 
+        const rowSource = sourceCol != null ? (cols[sourceCol] || null) : null;
         chunkBuffer.push({
           email,
           reason,
           riskScoreOverride,
+          ...(rowSource ? { source: rowSource } : {}),
+          firstName: firstNameCol != null ? (cols[firstNameCol] || null) : null,
+          lastName: lastNameCol != null ? (cols[lastNameCol] || null) : null,
           companyName: companyCol != null ? (cols[companyCol] || null) : null,
           leadId: leadIdCol != null ? (cols[leadIdCol] || null) : null,
           phone: phoneCol != null ? (cols[phoneCol] || null) : null,

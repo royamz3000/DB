@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost } from './client';
+import { apiDelete, apiGet, apiPatch, apiPost } from './client';
 
 export function fetchSuppressions({ search, reasons, listId, page, pageSize }) {
   const params = new URLSearchParams();
@@ -11,6 +11,7 @@ export function fetchSuppressions({ search, reasons, listId, page, pageSize }) {
 }
 
 export const fetchEntry = (id) => apiGet(`/suppressions/${id}`);
+export const updateEntry = (id, patch) => apiPatch(`/suppressions/${id}`, patch);
 export const unsuppressEntries = (ids) => apiPost('/suppressions/unsuppress', { ids });
 export const addEntryNote = (id, note) => apiPost(`/suppressions/${id}/notes`, { note });
 export const askOpsToReview = (id) => apiPost(`/suppressions/${id}/ask-review`, {});

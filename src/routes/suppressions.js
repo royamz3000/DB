@@ -20,11 +20,11 @@ router.get('/export', requireOps, (req, res) => {
 
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="suppressed.csv"');
-  res.write('email,reason,list,added_by,added_at,risk_score,company_name,lead_id,phone,crm_owner,crm_record_url\n');
+  res.write('email,reason,source,list,added_by,added_at,risk_score,first_name,last_name,company_name,lead_id,phone,crm_owner,crm_record_url\n');
   for (const r of rows) {
     res.write([
-      csvField(r.email), r.reason, csvField(r.list_name), csvField(r.added_by), r.created_at, r.risk_score,
-      csvField(r.company_name), csvField(r.lead_id), csvField(r.phone), csvField(r.crm_owner), csvField(r.crm_record_url),
+      csvField(r.email), r.reason, csvField(r.source), csvField(r.list_name), csvField(r.added_by), r.created_at, r.risk_score,
+      csvField(r.first_name), csvField(r.last_name), csvField(r.company_name), csvField(r.lead_id), csvField(r.phone), csvField(r.crm_owner), csvField(r.crm_record_url),
     ].join(',') + '\n');
   }
   res.end();
@@ -35,6 +35,15 @@ router.get('/:id', (req, res) => {
   if (!entry) return res.status(404).json({ error: 'Not found.' });
   const events = suppressions.getEventsForEntry(req.params.id);
   res.json({ entry, events });
+});
+
+router.patch('/:id', requireOps, (req, res) => {
+  const result = suppressions.updateEntry(req.params.id, req.body || {});
+  if (!result.ok) {
+    const code = result.error === 'not_found' ? 404 : 400;
+    return res.status(code).json({ error: result.error });
+  }
+  res.json(result);
 });
 
 router.post('/unsuppress', requireOps, (req, res) => {

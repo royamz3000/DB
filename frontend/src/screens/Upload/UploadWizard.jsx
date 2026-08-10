@@ -28,7 +28,10 @@ const FILE_KIND_OPTIONS = [
 
 const MAP_TARGETS = [
   { value: 'email', label: 'Email address' },
+  { value: 'first_name', label: 'First name' },
+  { value: 'last_name', label: 'Last name' },
   { value: 'reason', label: 'Suppression reason' },
+  { value: 'source', label: 'Source' },
   { value: 'date', label: 'Date added' },
   { value: 'added_by', label: 'Added by' },
   { value: 'company', label: 'Company name' },
@@ -42,7 +45,10 @@ const MAP_TARGETS = [
 
 const MAP_KEY_TO_GUESS = {
   email: 'emailCol',
+  first_name: 'firstNameCol',
+  last_name: 'lastNameCol',
   reason: 'reasonCol',
+  source: 'sourceCol',
   date: 'dateCol',
   added_by: 'addedByCol',
   company: 'companyCol',
@@ -134,6 +140,9 @@ export default function UploadWizard() {
       mapping: {
         emailCol: colFor('email'),
         reasonCol: colFor('reason'),
+        firstNameCol: colFor('first_name'),
+        lastNameCol: colFor('last_name'),
+        sourceCol: colFor('source'),
         companyCol: colFor('company'),
         leadIdCol: colFor('lead_id'),
         phoneCol: colFor('phone'),

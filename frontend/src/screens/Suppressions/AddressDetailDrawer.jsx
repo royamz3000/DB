@@ -3,9 +3,10 @@ import { PaperPlaneTilt } from '@phosphor-icons/react';
 import Drawer from '../../components/Drawer';
 import Button from '../../components/Button';
 import StatusDot from '../../components/StatusDot';
-import { statusColor, statusLabel } from '../../lib/status';
+import { statusColor, statusLabel, REASON_ORDER } from '../../lib/status';
 import { eventLabel, formatTimestamp } from '../../lib/events';
-import { fetchEntry, unsuppressEntries, addEntryNote, askOpsToReview, revalidateEntry } from '../../api/suppressions';
+import { fetchEntry, updateEntry, unsuppressEntries, addEntryNote, askOpsToReview, revalidateEntry } from '../../api/suppressions';
+import { SelectField, TextField } from '../../components/Field';
 import { useRole } from '../../context/RoleContext';
 import { useToast } from '../../context/ToastContext';
 
@@ -16,14 +17,46 @@ export default function AddressDetailDrawer({ entryId, onClose, onChanged }) {
   const [addingNote, setAddingNote] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({});
 
   useEffect(() => {
     if (!entryId) {
       setData(null);
       return;
     }
+    setEditing(false);
     fetchEntry(entryId).then(setData).catch(() => setData(null));
   }, [entryId]);
+
+  const startEdit = () => {
+    const e = data.entry;
+    setForm({
+      reason: e.reason,
+      source: e.source || '',
+      firstName: e.first_name || '',
+      lastName: e.last_name || '',
+      companyName: e.company_name || '',
+      phone: e.phone || '',
+    });
+    setEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    setBusy(true);
+    try {
+      await updateEntry(entryId, form);
+      const fresh = await fetchEntry(entryId);
+      setData(fresh);
+      setEditing(false);
+      showToast('Address updated');
+      onChanged?.();
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (!entryId) return null;
 
@@ -101,28 +134,55 @@ export default function AddressDetailDrawer({ entryId, onClose, onChanged }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <Fact label="Reason" value={statusLabel(entry.reason)} />
-            <Fact label="Source list" value={entry.list_name} />
-            <Fact label="Date added" value={new Date(entry.created_at).toLocaleDateString()} />
-            <Fact label="Added by" value={entry.added_by} />
-            <Fact label="Risk score" value={`${entry.risk_score} / 100`} />
-            <Fact label="Domain" value={domain} mono />
-            <Fact label="Company" value={entry.company_name || '—'} />
-            <Fact label="Lead / Contact ID" value={entry.lead_id || '—'} mono />
-            <Fact label="Phone" value={entry.phone || '—'} />
-            <Fact label="CRM owner" value={entry.crm_owner || '—'} />
-            {entry.crm_record_url && (
-              <Fact
-                label="CRM record"
-                value={
-                  <a href={entry.crm_record_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>
-                    Open in CRM ↗
-                  </a>
-                }
-              />
-            )}
-          </div>
+          {isOps && !editing && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8 }}>
+              <Button variant="ghost" dense onClick={startEdit}>Edit details</Button>
+            </div>
+          )}
+
+          {editing ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <SelectField label="Status / reason" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })}>
+                {REASON_ORDER.map((r) => (
+                  <option key={r} value={r}>{statusLabel(r)}</option>
+                ))}
+              </SelectField>
+              <TextField label="Source" value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} placeholder="e.g. Constant Contact" />
+              <TextField label="First name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+              <TextField label="Last name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+              <TextField label="Company" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} />
+              <TextField label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <Button variant="secondary" dense onClick={() => setEditing(false)} disabled={busy}>Cancel</Button>
+                <Button variant="primary" dense onClick={handleSaveEdit} disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</Button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <Fact label="Status / reason" value={statusLabel(entry.reason)} />
+              <Fact label="Source" value={entry.source || '—'} />
+              <Fact label="Name" value={[entry.first_name, entry.last_name].filter(Boolean).join(' ') || '—'} />
+              <Fact label="Source list" value={entry.list_name} />
+              <Fact label="Date added" value={new Date(entry.created_at).toLocaleDateString()} />
+              <Fact label="Added by" value={entry.added_by} />
+              <Fact label="Risk score" value={`${entry.risk_score} / 100`} />
+              <Fact label="Domain" value={domain} mono />
+              <Fact label="Company" value={entry.company_name || '—'} />
+              <Fact label="Lead / Contact ID" value={entry.lead_id || '—'} mono />
+              <Fact label="Phone" value={entry.phone || '—'} />
+              <Fact label="CRM owner" value={entry.crm_owner || '—'} />
+              {entry.crm_record_url && (
+                <Fact
+                  label="CRM record"
+                  value={
+                    <a href={entry.crm_record_url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>
+                      Open in CRM ↗
+                    </a>
+                  }
+                />
+              )}
+            </div>
+          )}
 
           <div>
             <div className="text-section" style={{ marginBottom: 10 }}>Event history</div>

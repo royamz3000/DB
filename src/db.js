@@ -42,6 +42,8 @@ db.exec(`
     risk_score INTEGER NOT NULL DEFAULT 50,
     source TEXT NOT NULL DEFAULT 'manual',
     added_by TEXT NOT NULL DEFAULT 'ops@workspace',
+    first_name TEXT,
+    last_name TEXT,
     company_name TEXT,
     lead_id TEXT,
     phone TEXT,
@@ -155,7 +157,7 @@ db.exec(`
 // Adds columns introduced after a database may have already been created,
 // so existing local databases pick up new fields without a manual reset.
 const existingColumns = new Set(db.prepare('PRAGMA table_info(suppression_entries)').all().map((c) => c.name));
-for (const column of ['company_name', 'lead_id', 'phone', 'crm_owner', 'crm_record_url']) {
+for (const column of ['company_name', 'lead_id', 'phone', 'crm_owner', 'crm_record_url', 'first_name', 'last_name']) {
   if (!existingColumns.has(column)) {
     db.exec(`ALTER TABLE suppression_entries ADD COLUMN ${column} TEXT`);
   }

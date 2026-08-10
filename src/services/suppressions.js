@@ -18,17 +18,20 @@ function riskScoreFor(reason) {
 const insertEntryStmt = db.prepare(`
   INSERT INTO suppression_entries (
     email, reason, list_id, risk_score, source, added_by,
-    company_name, lead_id, phone, crm_owner, crm_record_url,
+    first_name, last_name, company_name, lead_id, phone, crm_owner, crm_record_url,
     created_at, updated_at
   )
   VALUES (
     @email, @reason, @listId, @riskScore, @source, @addedBy,
-    @companyName, @leadId, @phone, @crmOwner, @crmRecordUrl,
+    @firstName, @lastName, @companyName, @leadId, @phone, @crmOwner, @crmRecordUrl,
     @createdAt, @createdAt
   )
   ON CONFLICT (email, list_id) DO UPDATE SET
     reason = excluded.reason,
     risk_score = excluded.risk_score,
+    source = excluded.source,
+    first_name = COALESCE(excluded.first_name, suppression_entries.first_name),
+    last_name = COALESCE(excluded.last_name, suppression_entries.last_name),
     company_name = COALESCE(excluded.company_name, suppression_entries.company_name),
     lead_id = COALESCE(excluded.lead_id, suppression_entries.lead_id),
     phone = COALESCE(excluded.phone, suppression_entries.phone),
@@ -47,6 +50,7 @@ const insertEventStmt = db.prepare(`
  */
 function addEntry({
   email, reason, listId, source = 'manual', addedBy = 'ops@workspace', createdAt, eventDetail, riskScoreOverride,
+  firstName = null, lastName = null,
   companyName = null, leadId = null, phone = null, crmOwner = null, crmRecordUrl = null,
 }) {
   const normalized = normalizeEmail(email);
@@ -63,6 +67,8 @@ function addEntry({
     riskScore,
     source,
     addedBy,
+    firstName,
+    lastName,
     companyName,
     leadId,
     phone,
@@ -89,7 +95,9 @@ function addEntriesBulk(rows, { listId, source = 'upload', addedBy = 'ops@worksp
 
   const run = db.transaction((items) => {
     for (const item of items) {
-      const result = addEntry({ ...item, listId, source, addedBy });
+      // A per-row source (from a mapped "source" column) wins over the
+      // import's default source; listId/addedBy always come from the import.
+      const result = addEntry({ source, ...item, listId, addedBy });
       if (result.ok) {
         if (result.wasDuplicate) duplicates += 1;
         else added += 1;
@@ -135,8 +143,9 @@ function listEntries({ search, reasons, listId, page = 1, pageSize = 50 } = {}) 
   if (search) {
     clauses.push(`(
       e.email LIKE @search OR l.name LIKE @search OR
+      e.first_name LIKE @search OR e.last_name LIKE @search OR
       e.company_name LIKE @search OR e.lead_id LIKE @search OR
-      e.phone LIKE @search OR e.crm_owner LIKE @search
+      e.phone LIKE @search OR e.crm_owner LIKE @search OR e.source LIKE @search
     )`);
     params.search = `%${search.trim().toLowerCase()}%`;
   }
@@ -187,8 +196,9 @@ function listEntriesForExport({ search, reasons, listId, scope } = {}) {
   if (search) {
     clauses.push(`(
       e.email LIKE @search OR l.name LIKE @search OR
+      e.first_name LIKE @search OR e.last_name LIKE @search OR
       e.company_name LIKE @search OR e.lead_id LIKE @search OR
-      e.phone LIKE @search OR e.crm_owner LIKE @search
+      e.phone LIKE @search OR e.crm_owner LIKE @search OR e.source LIKE @search
     )`);
     params.search = `%${search.trim().toLowerCase()}%`;
   }
@@ -199,12 +209,54 @@ function listEntriesForExport({ search, reasons, listId, scope } = {}) {
   }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   return db.prepare(`
-    SELECT e.email, e.reason, l.name AS list_name, e.added_by, e.created_at, e.risk_score,
-      e.company_name, e.lead_id, e.phone, e.crm_owner, e.crm_record_url
+    SELECT e.email, e.reason, e.source, l.name AS list_name, e.added_by, e.created_at, e.risk_score,
+      e.first_name, e.last_name, e.company_name, e.lead_id, e.phone, e.crm_owner, e.crm_record_url
     FROM suppression_entries e JOIN lists l ON l.id = e.list_id
     ${where}
     ORDER BY e.created_at DESC
   `).all(params);
+}
+
+const VALID_REASONS = new Set([
+  'hard_bounce', 'soft_bounce', 'unsubscribed', 'spam_complaint', 'catch_all_risky', 'global_blocklist',
+]);
+const EDITABLE_FIELDS = {
+  reason: 'reason', source: 'source', firstName: 'first_name', lastName: 'last_name',
+  companyName: 'company_name', leadId: 'lead_id', phone: 'phone', crmOwner: 'crm_owner',
+};
+
+/**
+ * Edits fields on an existing entry (e.g. change its reason/status or source).
+ * Only whitelisted columns can be set; reason is validated against the enum.
+ * Logs an event describing what changed.
+ */
+function updateEntry(id, patch, actor = 'ops@workspace') {
+  const entry = getEntryById(id);
+  if (!entry) return { ok: false, error: 'not_found' };
+  if (patch.reason !== undefined && !VALID_REASONS.has(patch.reason)) {
+    return { ok: false, error: 'invalid_reason' };
+  }
+
+  const sets = [];
+  const values = {};
+  for (const [key, column] of Object.entries(EDITABLE_FIELDS)) {
+    if (patch[key] !== undefined) {
+      sets.push(`${column} = @${key}`);
+      values[key] = patch[key] === '' ? null : patch[key];
+    }
+  }
+  if (sets.length === 0) return { ok: true };
+
+  db.prepare(`UPDATE suppression_entries SET ${sets.join(', ')}, updated_at = datetime('now') WHERE id = @id`)
+    .run({ ...values, id });
+
+  if (patch.reason !== undefined && patch.reason !== entry.reason) {
+    insertEventStmt.run(id, 'reason_changed', `Status changed from ${entry.reason} to ${patch.reason}.`, actor, new Date().toISOString());
+  } else {
+    insertEventStmt.run(id, 'edited', 'Entry details updated.', actor, new Date().toISOString());
+  }
+
+  return { ok: true, entry: getEntryById(id) };
 }
 
 function unsuppress(ids, actor = 'ops@workspace') {
@@ -251,6 +303,7 @@ module.exports = {
   getEventsForEntry,
   listEntries,
   listEntriesForExport,
+  updateEntry,
   unsuppress,
   addNote,
   requestReview,
